@@ -180,7 +180,10 @@ class VolkswagenConnectValueSensor(_Base):
         if not v:
             return None
         val = v.values.get(self._key)
-        if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(val, str):
+        # Use the public accessor, not the private `_attr_device_class`: when a
+        # sensor has no device class set, reading the backing attribute directly
+        # raises on HA's cached-properties machinery.
+        if self.device_class == SensorDeviceClass.TIMESTAMP and isinstance(val, str):
             return dt_util.parse_datetime(val)
         if isinstance(val, bool):
             return str(val).lower()
