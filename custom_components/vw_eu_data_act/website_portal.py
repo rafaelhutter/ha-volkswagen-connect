@@ -92,29 +92,27 @@ class WebsitePortalClient:
 
     # -- cookie persistence -------------------------------------------------
 
+    # Hosts the session spans. We can't reliably recover the per-cookie host
+    # for host-only cookies (aiohttp exposes an empty domain for them), so on
+    # import we broadcast every cookie to BOTH hosts. Sending an extra cookie a
+    # host doesn't expect is harmless; the win is that the `auth0` SSO cookie
+    # reliably reaches identity.vwgroup.io (it previously got misfiled under
+    # www.volkswagen.de, breaking silent refresh).
+    _HOSTS = ("https://www.volkswagen.de/", "https://identity.vwgroup.io/")
+
     def export_cookies(self) -> list[dict[str, str]]:
-        out: list[dict[str, str]] = []
+        seen: dict[str, str] = {}
         for cookie in self._session.cookie_jar:
-            out.append(
-                {
-                    "key": cookie.key,
-                    "value": cookie.value,
-                    "domain": cookie["domain"] or "",
-                    "path": cookie["path"] or "/",
-                }
-            )
-        return out
+            seen[cookie.key] = cookie.value
+        return [{"key": k, "value": v} for k, v in seen.items()]
 
     def import_cookies(self, data: list[dict[str, str]]) -> None:
-        by_domain: dict[str, SimpleCookie] = {}
+        sc: SimpleCookie = SimpleCookie()
         for c in data:
-            dom = c.get("domain") or "www.volkswagen.de"
-            sc = by_domain.setdefault(dom, SimpleCookie())
-            sc[c["key"]] = c["value"]
-            sc[c["key"]]["domain"] = dom
-            sc[c["key"]]["path"] = c.get("path") or "/"
-        for dom, sc in by_domain.items():
-            self._session.cookie_jar.update_cookies(sc, URL(f"https://{dom.lstrip('.')}/"))
+            if c.get("key"):
+                sc[c["key"]] = c.get("value", "")
+        for host in self._HOSTS:
+            self._session.cookie_jar.update_cookies(sc, URL(host))
 
     def _csrf(self) -> str | None:
         for cookie in self._session.cookie_jar:
@@ -198,10 +196,13 @@ class WebsitePortalClient:
 
     async def refresh(self) -> None:
         """Silently re-establish the portal session via the SSO cookie."""
-        async with self._session.get(
-            AUTHPROXY_LOGIN, headers={"User-Agent": UA}, allow_redirects=True
-        ) as r:
-            url = str(r.url)
+        try:
+            async with self._session.get(
+                AUTHPROXY_LOGIN, headers={"User-Agent": UA}, allow_redirects=True
+            ) as r:
+                url = str(r.url)
+        except aiohttp.ClientError as err:
+            raise WebsitePortalError(f"refresh request failed: {err}") from err
         if "/u/login" in url or "/signin-service" in url:
             raise WebsitePortalAuthError("SSO session expired; full re-auth required")
         if not (urlparse(url).hostname or "").endswith("volkswagen.de"):

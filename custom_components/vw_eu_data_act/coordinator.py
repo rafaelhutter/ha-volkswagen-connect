@@ -36,11 +36,7 @@ from .eu_data_act import (
     EuDataActError,
     EuDataActNotConfigured,
 )
-from .website_portal import (
-    WebsitePortalAuthError,
-    WebsitePortalClient,
-    WebsitePortalError,
-)
+from .website_portal import WebsitePortalAuthError, WebsitePortalClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,8 +129,21 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
         return result
 
     async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
+        """Best-effort: enrich vehicles with portal data. Never blocks setup."""
+        assert self.portal is not None
         try:
             await self.portal.refresh()
+        except WebsitePortalAuthError as err:
+            _LOGGER.warning(
+                "Website portal session expired (%s). Odometer/service data is paused; "
+                "open the integration and Reconfigure to restore it.",
+                err,
+            )
+            return
+        except Exception as err:  # noqa: BLE001 - portal must never break EU Data Act
+            _LOGGER.warning("Website portal refresh failed, skipping this cycle: %s", err)
+            return
+        try:
             # If EU Data Act surfaced no vehicles, discover the VIN via the portal.
             if not result:
                 vin = await self.portal.get_first_vin()
@@ -150,15 +159,10 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
                     if info.get(k) and not data.info.get(k):
                         data.info[k] = info[k]
                 data.portal_ok = True
-        except WebsitePortalAuthError as err:
-            # Don't kill EU Data Act data — degrade and ask the user to re-auth.
-            _LOGGER.warning("Website portal session expired (%s); starting reauth", err)
-            self.entry.async_start_reauth(self.hass)
-        except WebsitePortalError as err:
-            _LOGGER.warning("Website portal update failed: %s", err)
-        else:
             # Persist the refreshed cookies for the next restart.
             self.hass.config_entries.async_update_entry(
                 self.entry,
                 data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
             )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Website portal data fetch failed: %s", err)

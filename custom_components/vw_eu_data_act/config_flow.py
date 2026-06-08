@@ -41,7 +41,7 @@ from .eu_data_act import (
     EuDataActClient,
     EuDataActError,
 )
-from .website_portal import WebsitePortalClient, WebsitePortalError
+from .website_portal import WebsitePortalClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class EuDataActConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         try:
             state = await self._portal.begin_login()
-        except WebsitePortalError as err:
+        except Exception as err:  # noqa: BLE001 - portal is optional; never block setup
             _LOGGER.warning("Website portal login unavailable, continuing without it: %s", err)
             self._portal_ready = False
             return self._finish()
@@ -136,7 +136,7 @@ class EuDataActConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None and self._portal is not None:
             try:
                 await self._portal.submit_otp(user_input[CONF_OTP].strip())
-            except WebsitePortalError:
+            except Exception:  # noqa: BLE001 - surface as a retryable OTP error
                 errors["base"] = "invalid_otp"
             else:
                 self._portal_ready = True
