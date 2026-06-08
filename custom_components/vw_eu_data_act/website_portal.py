@@ -216,6 +216,9 @@ class WebsitePortalClient:
         headers = {
             "User-Agent": UA,
             "Accept": accept,
+            # Some endpoints (e.g. warninglights/last) 400 without a language;
+            # the website always sends de-DE. Harmless for the others.
+            "Accept-Language": "de-DE",
             "x-csrf-token": self._csrf() or "",
             "user-id": "__userId__",
             "traceId": uuid.uuid4().hex,
@@ -308,6 +311,86 @@ class WebsitePortalClient:
         put("plug_lock", ps.get("plugLockState"))
         put("external_power", ps.get("externalPower"))
         return out
+
+    async def get_warning_lights(self, vin: str) -> dict[str, Any]:
+        """Vehicle-health warning lights -> {"warning_lights": <count>}.
+
+        warninglights/last returns the currently-active dashboard warning lights;
+        an empty list means everything is OK (count 0).
+        """
+        status, body = await self._get(
+            f"/app/authproxy/vwag-weconnect/proxy/vehicles/{vin}/warninglights/last"
+            "?gdc=myvw-wcar-prod&resourceHost=myvw-vcf-prod",
+            accept="*/*",
+        )
+        if status != 200:
+            _LOGGER.debug("portal warninglights %s -> %s", vin, status)
+            return {}
+        try:
+            lights = json.loads(body).get("data", {}).get("warningLights")
+        except ValueError:
+            return {}
+        if not isinstance(lights, list):
+            return {}
+        return {"warning_lights": len(lights)}
+
+    async def get_lock_history(self, vin: str) -> dict[str, Any]:
+        """Last *confirmed* remote lock/unlock command from the transaction log.
+
+        This is NOT a live lock sensor: the live access/door/window status sits
+        behind VW's secured-operations tier (only the attestation-backed mobile
+        app can read it). The website exposes the lock/unlock *command history*
+        instead, so we surface the most recent successful one as the best
+        available signal. Keys: last_lock_action ("lock"/"unlock"),
+        last_lock_action_time (ISO timestamp).
+        """
+        status, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/vehicles/{vin}/transactionhistory"
+            "?gdc=myvw-wcar-prod&resourceHost=myvw-vcf-prod",
+            accept="*/*",
+        )
+        if status != 200:
+            _LOGGER.debug("portal transactionhistory %s -> %s", vin, status)
+            return {}
+        try:
+            messages = json.loads(body).get("data", {}).get("messages", [])
+        except ValueError:
+            return {}
+        locks = [
+            m
+            for m in messages
+            if isinstance(m, dict)
+            and m.get("category") == "remotelockunlock"
+            and m.get("action") in ("lock", "unlock")
+        ]
+        if not locks:
+            return {}
+        locks.sort(key=lambda m: m.get("timestamp", ""))
+        # Prefer the most recent *successful* command; fall back to the latest.
+        confirmed = [m for m in locks if m.get("actionSuccess")]
+        chosen = (confirmed or locks)[-1]
+        out: dict[str, Any] = {"last_lock_action": chosen["action"]}
+        if chosen.get("timestamp"):
+            out["last_lock_action_time"] = chosen["timestamp"]
+        return out
+
+    async def get_vehicle_image_url(self, vin: str) -> str | None:
+        """Public CDN URL of the vehicle's exterior side view (or None)."""
+        status, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/vehicleimages/exterior/{vin}"
+            "?viewDirection=side&angle=left&resourceHost=myvw-vilma-proxy-prod",
+            accept="*/*",
+        )
+        if status != 200:
+            _LOGGER.debug("portal vehicleimage %s -> %s", vin, status)
+            return None
+        try:
+            urls = json.loads(body).get("imageUrls")
+        except ValueError:
+            return None
+        if isinstance(urls, list) and urls and isinstance(urls[0], str):
+            return urls[0]
+        return None
 
     async def get_vehicle_info(self, vin: str) -> dict[str, Any]:
         """Static vehicle info: modelName, exteriorColor, engine, nickname, licensePlate."""

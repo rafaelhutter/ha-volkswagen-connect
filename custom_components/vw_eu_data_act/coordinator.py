@@ -52,6 +52,7 @@ class VehicleData:
     dataset: str | None = None
     created_on: str | None = None
     values: dict[str, Any] = field(default_factory=dict)
+    image_url: str | None = None
     portal_ok: bool = False
 
 
@@ -148,6 +149,11 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
                         data.values[clean] = maint[raw]
                 # Live battery/charging telemetry (already clean keys).
                 data.values.update(await self.portal.get_charging(vin))
+                # Vehicle-health warning lights + last lock/unlock command.
+                data.values.update(await self.portal.get_warning_lights(vin))
+                data.values.update(await self.portal.get_lock_history(vin))
+                # Exterior image (public CDN URL, served by the image platform).
+                data.image_url = await self.portal.get_vehicle_image_url(vin)
                 info = await self.portal.get_vehicle_info(vin)
                 for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
                     if info.get(k) and not data.info.get(k):

@@ -17,6 +17,27 @@ remaining **attestation-free** channel: it logs in via the classic VW Identity
 
 ## Prerequisites (one-time, in a browser)
 
+### A. Activate connected services on volkswagen.de  *(required for live data)*
+
+The reliable live data (battery/charging, odometer, service-due, vehicle-health
+warning lights, lock history, vehicle image) comes from your **volkswagen.de**
+account. That account must be **activated** for the vehicle once:
+
+1. Go to **https://www.volkswagen.de** → log in with your Volkswagen ID →
+   **myVolkswagen**, and open your vehicle.
+2. Under *Ihre mobilen Online-Dienste* complete **„Identität bestätigen"**
+   (confirm identity) so you become the **Hauptnutzer / primary user**. The
+   portal walks you through the *Vehicle Activation Service* and finishes with
+   *„Super! Sie sind jetzt startklar."* (all steps **Fertig**).
+   - This is a normal account step — **no S-PIN or in-car confirmation** is
+     needed; it reuses your existing login. If you already use the VW app or the
+     portal, it is usually done already.
+3. That's it — during integration setup you log in with the same Volkswagen ID
+   and approve the email **OTP**; the integration then reuses that website
+   session for live data.
+
+### B. EU Data Act portal  *(optional — adds 15-min "continuous data")*
+
 1. Go to **https://eu-data-act.drivesomethinggreater.com**, log in with your
    Volkswagen ID, accept the consent screen, and link your vehicle.
 2. Enable a **continuous data request**: *Data clusters → Vehicle overview →
@@ -27,8 +48,9 @@ remaining **attestation-free** channel: it logs in via the classic VW Identity
    - The car must **report** before content appears; open the VW app or drive
      once to trigger the first sync.
 
-Without an active data request the integration shows `Data status: No data
-request configured`.
+Without an active data request the **Data status** sensor shows
+`not_configured` — that only affects source B; the live data from source A still
+works.
 
 ## Install
 
@@ -60,6 +82,11 @@ One device per vehicle, with:
   on the 15-min EU Data Act slot).
 - **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report** —
   also from the portal source.
+- **Warning lights** — number of active dashboard warning lights (`0` = all OK).
+- **Last lock command** / **Last lock command time** — the most recent *confirmed*
+  remote lock/unlock from the vehicle's transaction log (see Limitations: this is
+  the command history, **not** a live lock sensor).
+- **Image** — the vehicle's exterior side-view photo.
 - **Value sensors** — created dynamically from the latest EU Data Act dataset
   (keys depend on which clusters you enabled). New keys appear as delivered.
 
@@ -67,8 +94,14 @@ One device per vehicle, with:
 
 - **Read-only.** No remote control (lock/climate/charge) — that requires the
   attestation-gated app API and is not possible here.
-- **15-minute cadence**, and only when the car actually reports data.
-- The available fields depend entirely on the clusters you enable on the portal.
+- **No live lock / window / door / climate / parking-position status.** These sit
+  behind VW's *secured-operations* tier, which only the attestation-backed mobile
+  app can read (`access/status` etc. return `401` even for a fully-activated
+  primary user). The website itself never reads them live — it shows the
+  **lock/unlock command history**, which is what the *Last lock command* sensor
+  surfaces. Treat it as "the last confirmed lock/unlock", not the current state.
+- The **EU Data Act source** is 15-minute cadence and only when the car reports;
+  its available fields depend on the clusters you enable on the portal.
 
 ## Credits
 
