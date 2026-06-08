@@ -129,13 +129,35 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             await self._merge_portal(result)
         return result
 
+    def _persist_portal_cookies(self) -> None:
+        """Save the current portal cookies so the session survives a restart."""
+        assert self.portal is not None
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
+        )
+
     async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
         """Best-effort: enrich vehicles with portal data. Never blocks setup.
 
-        Uses the persisted session directly; the client re-authenticates on
-        demand (only if a request shows the session has expired).
+        Keep-alive: the portal session's downstream tokens expire ~30 min after
+        the last login and are NOT renewed by data calls, while the identity SSO
+        behind the silent refresh lapses if it isn't exercised often enough. So
+        we proactively roll the session every cycle (15 min, well inside that
+        window) instead of only reacting to a 401 — by which point the SSO has
+        often already gone, forcing a needless re-login. Best-effort: if the
+        refresh fails we still try the existing session, and only a failing
+        *data* call is treated as a real auth loss.
         """
         assert self.portal is not None
+        try:
+            await self.portal.refresh()
+            self._persist_portal_cookies()
+        except WebsitePortalAuthError:
+            _LOGGER.debug("Proactive portal refresh: SSO not usable yet; trying existing session")
+        except Exception as err:  # noqa: BLE001 - never block on a refresh hiccup
+            _LOGGER.debug("Proactive portal refresh failed (continuing): %s", err)
+
         try:
             # If EU Data Act surfaced no vehicles, discover the VIN via the portal.
             if not result:
@@ -159,16 +181,18 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                     if info.get(k) and not data.info.get(k):
                         data.info[k] = info[k]
                 data.portal_ok = True
-            # Persist the (possibly refreshed) cookies for the next restart.
-            self.hass.config_entries.async_update_entry(
-                self.entry,
-                data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
-            )
         except WebsitePortalAuthError as err:
             _LOGGER.warning(
-                "Website portal session expired (%s). Odometer/service data is paused; "
+                "Website portal session expired (%s). Live data is paused; "
                 "open the integration and Reconfigure to restore it.",
                 err,
             )
         except Exception as err:  # noqa: BLE001 - portal must never break EU Data Act
             _LOGGER.warning("Website portal update failed, skipping this cycle: %s", err)
+        finally:
+            # Always persist the freshest cookies — the rolled SSO must survive a
+            # restart even if this cycle's data calls happened to fail.
+            try:
+                self._persist_portal_cookies()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Could not persist portal cookies: %s", err)
