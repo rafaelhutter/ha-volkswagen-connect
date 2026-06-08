@@ -11,15 +11,38 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import UnitOfLength, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import EuDataActConfigEntry, EuDataActCoordinator, VehicleData
+
+# Friendly metadata for known (authproxy-derived) keys. Unknown keys still get
+# a generic sensor.
+KNOWN_KEYS: dict[str, dict[str, Any]] = {
+    "odometer": {
+        "name": "Odometer",
+        "device_class": SensorDeviceClass.DISTANCE,
+        "unit": UnitOfLength.KILOMETERS,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+        "icon": "mdi:counter",
+    },
+    "inspection_due_days": {"name": "Inspection due", "unit": UnitOfTime.DAYS, "icon": "mdi:wrench-clock"},
+    "inspection_due_km": {"name": "Inspection due", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
+    "oil_service_due_days": {"name": "Oil service due", "unit": UnitOfTime.DAYS, "icon": "mdi:oil"},
+    "oil_service_due_km": {"name": "Oil service due", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
+    "last_report": {"name": "Last vehicle report", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check"},
+}
 
 
 async def async_setup_entry(
@@ -116,8 +139,16 @@ class EuDataActValueSensor(_Base):
         super().__init__(coordinator, vin)
         self._key = key
         self._attr_unique_id = f"{vin}_{key}"
-        self._attr_name = key
-        self._attr_entity_registry_enabled_default = True
+        meta = KNOWN_KEYS.get(key, {})
+        self._attr_name = meta.get("name", key)
+        if "device_class" in meta:
+            self._attr_device_class = meta["device_class"]
+        if "unit" in meta:
+            self._attr_native_unit_of_measurement = meta["unit"]
+        if "state_class" in meta:
+            self._attr_state_class = meta["state_class"]
+        if "icon" in meta:
+            self._attr_icon = meta["icon"]
 
     @property
     def native_value(self) -> StateType:
@@ -125,6 +156,8 @@ class EuDataActValueSensor(_Base):
         if not v:
             return None
         val = v.values.get(self._key)
+        if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(val, str):
+            return dt_util.parse_datetime(val)
         if isinstance(val, bool):
             return str(val).lower()
         return val

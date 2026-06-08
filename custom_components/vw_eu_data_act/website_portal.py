@@ -1,0 +1,286 @@
+"""Async client for the volkswagen.de website portal (authproxy).
+
+A second, more *reliable* data source alongside the EU Data Act portal. The
+website `authproxy` is a server-side confidential OAuth client, so its data
+(odometer / service-due / vehicle info / capabilities) is always available once
+authenticated — no dependency on the car reporting into a 15-min slot.
+
+Auth: the website client (`4fb52a96-…`) uses Auth0 universal login and triggers
+**email-OTP MFA**, so login is two-phase:
+    state = await client.begin_login()      # "ok" or "otp_required"
+    if state == "otp_required":
+        await client.submit_otp(code)        # code from the user's email
+The resulting session (cookies) is exportable for persistence; while the `auth0`
+SSO cookie is valid, `refresh()` re-establishes the short-lived portal session
+silently (no credentials, no OTP). When it expires, refresh() raises
+WebsitePortalAuthError -> the integration triggers HA reauth.
+
+Caller must pass an aiohttp.ClientSession with its OWN cookie jar.
+
+Header recipe per endpoint (discovered live): `x-csrf-token` = csrf_token cookie,
+`user-id: __userId__` (authproxy substitutes it), and a per-endpoint `Accept`
+version (maintenance/status wants `*/*`; usercapabilities wants
+`application/json;version=3`).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import uuid
+from http.cookies import SimpleCookie
+from typing import Any
+from urllib.parse import parse_qs, urljoin, urlparse
+
+import aiohttp
+from bs4 import BeautifulSoup
+from yarl import URL
+
+_LOGGER = logging.getLogger(__name__)
+
+PORTAL = "https://www.volkswagen.de"
+AUTHPROXY_LOGIN = (
+    PORTAL + "/app/authproxy/login?fag=vw-de,vwag-weconnect"
+    "&scope-vw-de=profile,address,phone,carConfigurations,dealers,cars,vin,profession"
+    "&scope-vwag-weconnect=openid,mbb&prompt-vwag-weconnect=none"
+    "&redirectUrl=" + PORTAL + "/de/besitzer-und-nutzer/myvolkswagen.html"
+    "&sessionTimeout=1800"
+)
+IDENTITY = "https://identity.vwgroup.io"
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
+REFERER = PORTAL + "/de/besitzer-und-nutzer/myvolkswagen.html"
+
+
+class WebsitePortalError(Exception):
+    """Base error."""
+
+
+class WebsitePortalAuthError(WebsitePortalError):
+    """Login/refresh failed; full re-auth (incl. OTP) needed."""
+
+
+class _MfaRequired(Exception):
+    def __init__(self, page_url: str, html: str) -> None:
+        self.page_url = page_url
+        self.html = html
+
+
+def _parse_form(html: str) -> tuple[dict[str, str], str | None]:
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form")
+    fields: dict[str, str] = {}
+    action: str | None = None
+    if form:
+        action = form.get("action")
+        for inp in form.find_all("input"):
+            name = inp.get("name")
+            if name:
+                fields[name] = inp.get("value", "")
+    return fields, action
+
+
+class WebsitePortalClient:
+    """Website-session (authproxy) client."""
+
+    def __init__(self, session: aiohttp.ClientSession, email: str, password: str) -> None:
+        self._session = session
+        self._email = email
+        self._password = password
+        self._mfa: dict[str, Any] | None = None
+
+    # -- cookie persistence -------------------------------------------------
+
+    def export_cookies(self) -> list[dict[str, str]]:
+        out: list[dict[str, str]] = []
+        for cookie in self._session.cookie_jar:
+            out.append(
+                {
+                    "key": cookie.key,
+                    "value": cookie.value,
+                    "domain": cookie["domain"] or "",
+                    "path": cookie["path"] or "/",
+                }
+            )
+        return out
+
+    def import_cookies(self, data: list[dict[str, str]]) -> None:
+        by_domain: dict[str, SimpleCookie] = {}
+        for c in data:
+            dom = c.get("domain") or "www.volkswagen.de"
+            sc = by_domain.setdefault(dom, SimpleCookie())
+            sc[c["key"]] = c["value"]
+            sc[c["key"]]["domain"] = dom
+            sc[c["key"]]["path"] = c.get("path") or "/"
+        for dom, sc in by_domain.items():
+            self._session.cookie_jar.update_cookies(sc, URL(f"https://{dom.lstrip('.')}/"))
+
+    def _csrf(self) -> str | None:
+        for cookie in self._session.cookie_jar:
+            if cookie.key == "csrf_token":
+                return cookie.value
+        return None
+
+    # -- login --------------------------------------------------------------
+
+    async def _follow(self, start_url: str, max_hops: int = 15) -> str:
+        """Follow redirects to the portal; raise _MfaRequired on the OTP page."""
+        ref = start_url
+        for _ in range(max_hops):
+            host = urlparse(ref).hostname or ""
+            if host.endswith("volkswagen.de") and "/app/authproxy/login" not in ref:
+                return ref
+            async with self._session.get(
+                ref, headers={"User-Agent": UA}, allow_redirects=False
+            ) as r:
+                status = r.status
+                loc = r.headers.get("Location")
+                cur = str(r.url)
+                body = await r.text() if status == 200 else ""
+            if "/u/mfa-email-challenge" in cur and status == 200:
+                raise _MfaRequired(cur, body)
+            if not loc:
+                return cur
+            ref = urljoin(ref, loc)
+        raise WebsitePortalError("too many redirects during login")
+
+    async def begin_login(self) -> str:
+        """Start login. Returns 'ok' (logged in) or 'otp_required'."""
+        async with self._session.get(
+            AUTHPROXY_LOGIN, headers={"User-Agent": UA}, allow_redirects=True
+        ) as r:
+            page_url = str(r.url)
+        if "/u/login" not in page_url:
+            if (urlparse(page_url).hostname or "").endswith("volkswagen.de"):
+                return "ok"  # silent SSO
+            raise WebsitePortalAuthError(f"unexpected authorize landing: {page_url}")
+        state = parse_qs(urlparse(page_url).query).get("state", [None])[0]
+        async with self._session.post(
+            f"{IDENTITY}/u/login?state={state}",
+            data={"state": state, "username": self._email, "password": self._password},
+            headers={"User-Agent": UA},
+            allow_redirects=False,
+        ) as r:
+            loc = r.headers.get("Location")
+            cur = str(r.url)
+        if not loc:
+            raise WebsitePortalAuthError("login rejected (wrong credentials?)")
+        try:
+            await self._follow(urljoin(cur, loc))
+            return "ok"
+        except _MfaRequired as mfa:
+            fields, action = _parse_form(mfa.html)
+            self._mfa = {"page_url": mfa.page_url, "fields": fields, "action": action}
+            return "otp_required"
+
+    async def submit_otp(self, code: str) -> str:
+        if not self._mfa:
+            raise WebsitePortalError("no MFA challenge pending")
+        fields = dict(self._mfa["fields"])
+        for key in list(fields):
+            if key.lower() in ("code", "otp", "mfa-code", "token"):
+                fields[key] = code
+            if "remember" in key.lower():
+                fields[key] = "true"
+        fields.setdefault("code", code)
+        target = urljoin(self._mfa["page_url"], self._mfa["action"] or "")
+        async with self._session.post(
+            target, data=fields, headers={"User-Agent": UA}, allow_redirects=False
+        ) as r:
+            loc = r.headers.get("Location")
+            cur = str(r.url)
+        if not loc:
+            raise WebsitePortalAuthError("OTP rejected")
+        await self._follow(urljoin(cur, loc))
+        self._mfa = None
+        return "ok"
+
+    async def refresh(self) -> None:
+        """Silently re-establish the portal session via the SSO cookie."""
+        async with self._session.get(
+            AUTHPROXY_LOGIN, headers={"User-Agent": UA}, allow_redirects=True
+        ) as r:
+            url = str(r.url)
+        if "/u/login" in url or "/signin-service" in url:
+            raise WebsitePortalAuthError("SSO session expired; full re-auth required")
+        if not (urlparse(url).hostname or "").endswith("volkswagen.de"):
+            raise WebsitePortalAuthError(f"refresh did not land on portal: {url}")
+
+    # -- data ---------------------------------------------------------------
+
+    async def _get(self, path: str, accept: str = "application/json") -> tuple[int, str]:
+        csrf = self._csrf()
+        headers = {
+            "User-Agent": UA,
+            "Accept": accept,
+            "x-csrf-token": csrf or "",
+            "user-id": "__userId__",
+            "traceId": uuid.uuid4().hex,
+            "Referer": REFERER,
+        }
+        async with self._session.get(
+            PORTAL + path, headers=headers, allow_redirects=False
+        ) as r:
+            return r.status, await r.text()
+
+    async def get_first_vin(self) -> str | None:
+        status, body = await self._get(
+            "/app/authproxy/vw-de/proxy/v2/users/me/relations?resourceHost=myvw-vum-prod"
+        )
+        if status == 401 or status == 403:
+            raise WebsitePortalAuthError("unauthorized")
+        m = re.findall(r'"vin"\s*:\s*"([A-Z0-9]{17})"', body)
+        return m[0] if m else None
+
+    async def get_maintenance(self, vin: str) -> dict[str, Any]:
+        """Returns mileage_km, inspectionDue_days/km, oilServiceDue_*, carCapturedTimestamp."""
+        status, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/vehicles/{vin}/maintenance/status"
+            "?gdc=myvw-wcar-prod&resourceHost=myvw-vcf-prod",
+            accept="*/*",
+        )
+        if status != 200:
+            _LOGGER.debug("portal maintenance %s -> %s", vin, status)
+            return {}
+        try:
+            return json.loads(body).get("data", {})
+        except ValueError:
+            return {}
+
+    async def get_vehicle_info(self, vin: str) -> dict[str, Any]:
+        """Static vehicle info: modelName, exteriorColor, engine, nickname, licensePlate."""
+        info: dict[str, Any] = {}
+        st, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/vehicles/{vin}/data/de-DE"
+            "?resourceHost=cwat-group-vehicle-file-service-prod"
+        )
+        if st == 200:
+            try:
+                info.update(json.loads(body))
+            except ValueError:
+                pass
+        st, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/vehicles/{vin}/details/de-DE"
+            "?resourceHost=cwat-group-vehicle-file-service-prod"
+        )
+        if st == 200:
+            try:
+                d = json.loads(body)
+                if d.get("engine"):
+                    info["engine"] = d["engine"]
+            except ValueError:
+                pass
+        st, body = await self._get(
+            f"/app/authproxy/vw-de/proxy/v2/users/me/relations/{vin}?resourceHost=myvw-vum-prod"
+        )
+        if st == 200:
+            try:
+                rel = json.loads(body).get("relation", {})
+                if rel.get("vehicleNickname"):
+                    info["nickname"] = rel["vehicleNickname"]
+                if rel.get("licensePlate"):
+                    info["licensePlate"] = rel["licensePlate"]
+            except ValueError:
+                pass
+        return info

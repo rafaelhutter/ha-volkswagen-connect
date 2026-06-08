@@ -10,6 +10,13 @@
           "brand": "Brand"
         }
       },
+      "otp": {
+        "title": "Two-factor code",
+        "description": "Volkswagen emailed a verification code (required for the optional volkswagen.de data source: odometer, service status). Enter it here, or leave the integration with EU Data Act data only by cancelling.",
+        "data": {
+          "otp": "Email code"
+        }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate",
         "description": "Enter the password for {email} again.",
@@ -20,7 +27,8 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
-      "cannot_connect": "Could not reach the EU Data Act portal."
+      "cannot_connect": "Could not reach the EU Data Act portal.",
+      "invalid_otp": "That verification code was not accepted. Check the latest email and try again."
     },
     "abort": {
       "already_configured": "This account is already configured.",

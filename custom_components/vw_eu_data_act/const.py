@@ -9,6 +9,10 @@ DOMAIN = "vw_eu_data_act"
 CONF_EMAIL = "email"
 CONF_PASSWORD = "password"
 CONF_BRAND = "brand"
+CONF_OTP = "otp"
+# Persisted website-portal session cookies (enables the optional authproxy
+# data source + silent refresh across restarts).
+CONF_WEBSITE_COOKIES = "website_cookies"
 
 # Polling cadence. The portal delivers at most one dataset per 15 min, so there
 # is no value in polling faster; we add a small offset to avoid hammering on the

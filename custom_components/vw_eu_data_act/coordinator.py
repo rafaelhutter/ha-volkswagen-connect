@@ -1,4 +1,9 @@
-"""DataUpdateCoordinator for the Volkswagen EU Data Act integration."""
+"""DataUpdateCoordinator for the Volkswagen EU Data Act integration.
+
+Two data sources, merged per vehicle:
+  * EU Data Act portal  — 15-min "continuous data" (when the car reports).
+  * volkswagen.de authproxy (optional) — reliable odometer / service / info.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +22,7 @@ from .const import (
     CONF_BRAND,
     CONF_EMAIL,
     CONF_PASSWORD,
+    CONF_WEBSITE_COOKIES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     STATUS_NO_DATA,
@@ -29,6 +35,11 @@ from .eu_data_act import (
     EuDataActClient,
     EuDataActError,
     EuDataActNotConfigured,
+)
+from .website_portal import (
+    WebsitePortalAuthError,
+    WebsitePortalClient,
+    WebsitePortalError,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,31 +56,44 @@ class VehicleData:
     dataset: str | None = None
     created_on: str | None = None
     values: dict[str, Any] = field(default_factory=dict)
+    portal_ok: bool = False
 
 
 type EuDataActConfigEntry = ConfigEntry["EuDataActCoordinator"]
 
+# maintenance/status field -> clean sensor key
+_MAINTENANCE_MAP = {
+    "mileage_km": "odometer",
+    "inspectionDue_days": "inspection_due_days",
+    "inspectionDue_km": "inspection_due_km",
+    "oilServiceDue_days": "oil_service_due_days",
+    "oilServiceDue_km": "oil_service_due_km",
+    "carCapturedTimestamp": "last_report",
+}
+
 
 class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
-    """Polls the EU Data Act portal every 15 minutes."""
+    """Polls the EU Data Act portal (and optionally the website authproxy)."""
 
     def __init__(self, hass: HomeAssistant, entry: EuDataActConfigEntry) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
-        )
+        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL)
         self.entry = entry
-        # Dedicated session with its OWN cookie jar (don't share the portal
-        # session cookies with other integrations).
-        session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
         self.client = EuDataActClient(
-            session,
+            async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
             email=entry.data[CONF_EMAIL],
             password=entry.data[CONF_PASSWORD],
             brand=entry.data.get(CONF_BRAND, DEFAULT_BRAND),
         )
+        # Website portal is optional: only active if we have a persisted session.
+        self.portal: WebsitePortalClient | None = None
+        cookies = entry.data.get(CONF_WEBSITE_COOKIES)
+        if cookies:
+            self.portal = WebsitePortalClient(
+                async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
+                email=entry.data[CONF_EMAIL],
+                password=entry.data[CONF_PASSWORD],
+            )
+            self.portal.import_cookies(cookies)
 
     async def _async_update_data(self) -> dict[str, VehicleData]:
         try:
@@ -84,7 +108,7 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
             vin = v.get("vin")
             if not vin:
                 continue
-            data = VehicleData(vin=vin, info=v)
+            data = VehicleData(vin=vin, info=dict(v))
             try:
                 meta = await self.client.get_metadata(vin)
                 data.identifier = meta.get("Identifier")
@@ -95,7 +119,7 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
                     data.status = STATUS_OK
                     data.dataset = latest["dataset"]
                     data.created_on = latest["created_on"]
-                    data.values = latest["values"]
+                    data.values = dict(latest["values"])
             except EuDataActNotConfigured:
                 data.status = STATUS_NOT_CONFIGURED
             except EuDataActAuthError as err:
@@ -103,4 +127,38 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
             except EuDataActError as err:
                 _LOGGER.warning("EU Data Act: %s update failed: %s", vin, err)
             result[vin] = data
+
+        if self.portal is not None:
+            await self._merge_portal(result)
         return result
+
+    async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
+        try:
+            await self.portal.refresh()
+            # If EU Data Act surfaced no vehicles, discover the VIN via the portal.
+            if not result:
+                vin = await self.portal.get_first_vin()
+                if vin:
+                    result[vin] = VehicleData(vin=vin, info={"vin": vin})
+            for vin, data in result.items():
+                maint = await self.portal.get_maintenance(vin)
+                for raw, clean in _MAINTENANCE_MAP.items():
+                    if maint.get(raw) is not None:
+                        data.values[clean] = maint[raw]
+                info = await self.portal.get_vehicle_info(vin)
+                for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
+                    if info.get(k) and not data.info.get(k):
+                        data.info[k] = info[k]
+                data.portal_ok = True
+        except WebsitePortalAuthError as err:
+            # Don't kill EU Data Act data — degrade and ask the user to re-auth.
+            _LOGGER.warning("Website portal session expired (%s); starting reauth", err)
+            self.entry.async_start_reauth(self.hass)
+        except WebsitePortalError as err:
+            _LOGGER.warning("Website portal update failed: %s", err)
+        else:
+            # Persist the refreshed cookies for the next restart.
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
+            )

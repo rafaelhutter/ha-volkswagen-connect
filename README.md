@@ -45,15 +45,25 @@ Without an active data request the integration shows
 Copy `custom_components/vw_eu_data_act/` into your HA `config/custom_components/`,
 restart, then add the integration.
 
+## Data sources
+
+1. **EU Data Act portal** — 15-min "continuous data" (only when the car reports;
+   can be empty while the car is idle). No 2FA.
+2. **volkswagen.de portal (`authproxy`)** — *optional, more reliable*: odometer,
+   inspection/oil-service due, and vehicle info, always available once
+   authenticated. Uses the website login, which sends an **email OTP during
+   setup** (and occasionally on re-auth). Skipping the OTP leaves source #1 only.
+
 ## Entities
 
 One device per vehicle:
 - **Data status** — `ok` / `no_data` / `not_configured`, with attributes (VIN,
   nickname, plate, enrollment status, data-request id, latest dataset,
   created-on timestamp). Always present.
-- **Value sensors** — created dynamically from the latest delivered dataset
-  (the available keys depend on which EU Data Act clusters you enabled). New
-  keys appear as they are first delivered.
+- **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report** —
+  from the volkswagen.de portal source (when enabled).
+- **Value sensors** — created dynamically from the latest EU Data Act dataset
+  (keys depend on which clusters you enabled). New keys appear as delivered.
 
 ## Limitations
 

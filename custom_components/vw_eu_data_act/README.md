@@ -37,15 +37,26 @@ request configured`.
 3. Settings → Devices & Services → **Add Integration** → "Volkswagen EU Data Act".
 4. Enter your Volkswagen ID email/password and pick your brand.
 
+## Data sources
+
+1. **EU Data Act portal** — 15-min "continuous data" (only when the car reports;
+   can be empty while idle). No 2FA.
+2. **volkswagen.de portal (`authproxy`)** — *optional, more reliable*: odometer,
+   service/inspection due, and vehicle info, always available once authenticated.
+   This source uses the website login, which sends an **email OTP** during setup
+   (and occasionally on re-auth). If you skip the OTP, the integration still works
+   with source #1 only.
+
 ## Entities
 
 One device per vehicle, with:
 - **Data status** sensor — `ok` / `no_data` / `not_configured`, plus attributes
   (VIN, nickname, plate, enrollment status, data-request id, latest dataset,
   created-on timestamp). Always present.
-- **Value sensors** — created dynamically from the latest delivered dataset
-  (keys depend on which EU Data Act clusters you enabled). New keys appear as
-  they are first delivered.
+- **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report** —
+  from the volkswagen.de portal source (when enabled).
+- **Value sensors** — created dynamically from the latest EU Data Act dataset
+  (keys depend on which clusters you enabled). New keys appear as delivered.
 
 ## Limitations
 
