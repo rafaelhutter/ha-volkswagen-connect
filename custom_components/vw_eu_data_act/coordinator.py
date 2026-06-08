@@ -146,6 +146,8 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
                 for raw, clean in _MAINTENANCE_MAP.items():
                     if maint.get(raw) is not None:
                         data.values[clean] = maint[raw]
+                # Live battery/charging telemetry (already clean keys).
+                data.values.update(await self.portal.get_charging(vin))
                 info = await self.portal.get_vehicle_info(vin)
                 for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
                     if info.get(k) and not data.info.get(k):

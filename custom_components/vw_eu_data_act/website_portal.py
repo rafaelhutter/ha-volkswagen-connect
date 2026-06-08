@@ -265,6 +265,50 @@ class WebsitePortalClient:
         except ValueError:
             return {}
 
+    async def get_charging(self, vin: str) -> dict[str, Any]:
+        """Live EV status from charging/status -> flat dict of present values.
+
+        Keys: soc, electric_range, target_soc, battery_temp (°C), charging_state,
+        charge_power, charge_rate, charge_time_remaining, charge_mode,
+        plug_connection, plug_lock, external_power.
+        """
+        status, body = await self._get(
+            f"/app/authproxy/vwag-weconnect/proxy/vehicles/{vin}/charging/status"
+            "?gdc=myvw-wcar-prod&resourceHost=myvw-vcf-prod",
+            accept="*/*",
+        )
+        if status != 200:
+            _LOGGER.debug("portal charging %s -> %s", vin, status)
+            return {}
+        try:
+            d = json.loads(body).get("data", {})
+        except ValueError:
+            return {}
+        bs = d.get("batteryStatus") or {}
+        cs = d.get("chargingStatus") or {}
+        ps = d.get("plugStatus") or {}
+        out: dict[str, Any] = {}
+
+        def put(key: str, val: Any) -> None:
+            if val is not None:
+                out[key] = val
+
+        put("soc", bs.get("currentSOC_pct"))
+        put("electric_range", bs.get("cruisingRangeElectric_km"))
+        put("target_soc", bs.get("navigationTargetSOC_pct"))
+        temp_k = bs.get("temperatureHvBattery_K")
+        if temp_k is not None:
+            out["battery_temp"] = round(temp_k - 273.15, 1)
+        put("charging_state", cs.get("chargingState"))
+        put("charge_power", cs.get("chargePower_kW"))
+        put("charge_rate", cs.get("chargeRate_kmph"))
+        put("charge_time_remaining", cs.get("remainingChargingTimeToComplete_min"))
+        put("charge_mode", cs.get("chargeMode"))
+        put("plug_connection", ps.get("plugConnectionState"))
+        put("plug_lock", ps.get("plugLockState"))
+        put("external_power", ps.get("externalPower"))
+        return out
+
     async def get_vehicle_info(self, vin: str) -> dict[str, Any]:
         """Static vehicle info: modelName, exteriorColor, engine, nickname, licensePlate."""
         info: dict[str, Any] = {}

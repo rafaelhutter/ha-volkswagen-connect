@@ -62,6 +62,9 @@ One device per vehicle:
   created-on timestamp). Always present.
 - **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report** —
   from the volkswagen.de portal source (when enabled).
+- **Live battery / charging** (volkswagen.de portal): Battery (SoC %), Electric range,
+  Charging state, Charge power/rate, Charge time remaining, Target battery, Battery
+  temperature, Plug / Plug lock / External power.
 - **Value sensors** — created dynamically from the latest EU Data Act dataset
   (keys depend on which clusters you enabled). New keys appear as delivered.
 

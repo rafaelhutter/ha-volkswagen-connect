@@ -53,8 +53,13 @@ One device per vehicle, with:
 - **Data status** sensor — `ok` / `no_data` / `not_configured`, plus attributes
   (VIN, nickname, plate, enrollment status, data-request id, latest dataset,
   created-on timestamp). Always present.
+- **Live battery / charging** (from the volkswagen.de portal): **Battery (SoC %)**,
+  **Electric range**, **Charging state**, **Charge power/rate**, **Charge time
+  remaining**, **Target battery**, **Battery temperature**, **Plug** / **Plug
+  lock** / **External power**. Available whenever the car has reported (not gated
+  on the 15-min EU Data Act slot).
 - **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report** —
-  from the volkswagen.de portal source (when enabled).
+  also from the portal source.
 - **Value sensors** — created dynamically from the latest EU Data Act dataset
   (keys depend on which clusters you enabled). New keys appear as delivered.
 
