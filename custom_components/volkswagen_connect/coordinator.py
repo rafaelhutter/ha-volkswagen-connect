@@ -1,13 +1,15 @@
 """DataUpdateCoordinator for the Volkswagen Connect integration.
 
 Two data sources, merged per vehicle:
-  * EU Data Act portal  — 15-min "continuous data" (when the car reports).
-  * volkswagen.de authproxy (optional) — reliable odometer / service / info.
+  * volkswagen.de authproxy — the reliable source (battery/charging, odometer,
+    service, warning lights, lock history, image).
+  * EU Data Act portal (optional, flaky) — 15-min "continuous data".
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -40,6 +42,10 @@ from .website_portal import WebsitePortalAuthError, WebsitePortalClient
 
 _LOGGER = logging.getLogger(__name__)
 
+# Don't roll the session more often than this (avoids a double refresh when the
+# explicit startup refresh is immediately followed by the first poll).
+_MIN_REFRESH_INTERVAL_S = 600
+
 
 @dataclass
 class VehicleData:
@@ -70,11 +76,13 @@ _MAINTENANCE_MAP = {
 
 
 class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
-    """Polls the EU Data Act portal (and optionally the website authproxy)."""
+    """Polls the website authproxy (and optionally the EU Data Act portal)."""
 
     def __init__(self, hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL)
         self.entry = entry
+        # Monotonic timestamp of the last portal session refresh (None = never).
+        self._last_refresh: float | None = None
         self.client = EuDataActClient(
             async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
             email=entry.data[CONF_EMAIL],
@@ -137,6 +145,32 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
         )
 
+    async def async_refresh_session(self, *, force: bool = False) -> None:
+        """Roll the website-portal session (best-effort) and persist it.
+
+        Called once at startup and again at the start of every poll, so both the
+        portal's downstream tokens and the identity SSO behind the silent refresh
+        stay rolled. Skips if a refresh happened within the last few minutes
+        (unless ``force``), to avoid a double refresh when the startup call is
+        immediately followed by the first poll. Never raises.
+        """
+        if self.portal is None:
+            return
+        if (
+            not force
+            and self._last_refresh is not None
+            and time.monotonic() - self._last_refresh < _MIN_REFRESH_INTERVAL_S
+        ):
+            return
+        try:
+            await self.portal.refresh()
+            self._last_refresh = time.monotonic()
+            self._persist_portal_cookies()
+        except WebsitePortalAuthError:
+            _LOGGER.debug("Session refresh: SSO not usable yet; trying existing session")
+        except Exception as err:  # noqa: BLE001 - never block on a refresh hiccup
+            _LOGGER.debug("Session refresh failed (continuing): %s", err)
+
     async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
         """Best-effort: enrich vehicles with portal data. Never blocks setup.
 
@@ -150,13 +184,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         *data* call is treated as a real auth loss.
         """
         assert self.portal is not None
-        try:
-            await self.portal.refresh()
-            self._persist_portal_cookies()
-        except WebsitePortalAuthError:
-            _LOGGER.debug("Proactive portal refresh: SSO not usable yet; trying existing session")
-        except Exception as err:  # noqa: BLE001 - never block on a refresh hiccup
-            _LOGGER.debug("Proactive portal refresh failed (continuing): %s", err)
+        await self.async_refresh_session()
 
         try:
             # If EU Data Act surfaced no vehicles, discover the VIN via the portal.

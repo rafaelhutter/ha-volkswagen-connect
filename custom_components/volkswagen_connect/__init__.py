@@ -13,6 +13,9 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.IMAGE]
 async def async_setup_entry(hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> bool:
     """Set up Volkswagen Connect from a config entry."""
     coordinator = VolkswagenConnectCoordinator(hass, entry)
+    # Roll the website-portal session up front so the very first poll runs on a
+    # fresh session (the restored cookies may be stale after a long downtime).
+    await coordinator.async_refresh_session(force=True)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
