@@ -113,11 +113,12 @@ Bentley — each via its EU Data Act portal OAuth client.
 
 ## Credits
 
-A spiritual successor to robinostlund's
-[`volkswagencarnet`](https://github.com/robinostlund/volkswagencarnet) — the
-long-standing Home Assistant VW integration that VW's 2026 app-attestation lock
-broke. This integration restores read-only data through the attestation-free
-channels.
+Stands on the shoulders of robinostlund's
+[`volkswagencarnet`](https://github.com/robinostlund/volkswagencarnet), which did
+the heavy lifting over many years as *the* Home Assistant VW integration. When
+VW's 2026 app-attestation lock broke the underlying API, this project picks up
+where it left off — extending and fixing access through the remaining
+attestation-free channels.
 
 Auth/data flow reverse-engineered with reference to TA2k's
 [`ioBroker.vw-connect`](https://github.com/TA2k/ioBroker.vw-connect)
