@@ -15,12 +15,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .coordinator import EuDataActConfigEntry, EuDataActCoordinator, VehicleData
+from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: EuDataActConfigEntry,
+    entry: VolkswagenConnectConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
@@ -33,7 +33,7 @@ async def async_setup_entry(
             if vin in known or not vehicle.image_url:
                 continue
             known.add(vin)
-            new.append(EuDataActVehicleImage(hass, coordinator, vin))
+            new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin))
         if new:
             async_add_entities(new)
 
@@ -52,7 +52,7 @@ def _device(vehicle: VehicleData) -> DeviceInfo:
     )
 
 
-class EuDataActVehicleImage(CoordinatorEntity[EuDataActCoordinator], ImageEntity):
+class VolkswagenConnectVehicleImage(CoordinatorEntity[VolkswagenConnectCoordinator], ImageEntity):
     """Exterior side-view photo of the vehicle."""
 
     _attr_has_entity_name = True
@@ -60,7 +60,7 @@ class EuDataActVehicleImage(CoordinatorEntity[EuDataActCoordinator], ImageEntity
     _attr_content_type = "image/png"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: EuDataActCoordinator, vin: str
+        self, hass: HomeAssistant, coordinator: VolkswagenConnectCoordinator, vin: str
     ) -> None:
         CoordinatorEntity.__init__(self, coordinator)
         ImageEntity.__init__(self, hass)

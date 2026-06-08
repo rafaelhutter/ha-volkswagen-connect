@@ -1,11 +1,13 @@
-## Volkswagen EU Data Act
+## Volkswagen Connect
 
-Read-only Home Assistant integration that pulls Volkswagen vehicle data from the
-**EU Data Act portal** every 15 minutes — the only attestation-free channel left
-after VW locked the WeConnect app API behind Play Integrity in 2026.
+Read-only Home Assistant integration that pulls Volkswagen vehicle data from your
+**volkswagen.de** account — the attestation-free channel left after VW locked the
+WeConnect app API behind Play Integrity in 2026. Battery/charging, odometer,
+service due, warning lights, lock history, and the vehicle image.
 
-**Before adding:** at <https://eu-data-act.drivesomethinggreater.com> log in,
-accept consent, link the vehicle, and enable a continuous **15-minute "All
-data"** request. Then add this integration and sign in with your Volkswagen ID.
+**Before adding:** at <https://www.volkswagen.de> → myVolkswagen, confirm your
+identity / become the vehicle's primary user (one-time, no S-PIN). Then add this
+integration, sign in with your Volkswagen ID, and approve the email OTP.
 
-Read-only (no remote control). Data appears once the car reports.
+Read-only (no remote control, no live lock/window status). The EU Data Act portal
+is supported as a future/best-effort source but is currently unreliable.

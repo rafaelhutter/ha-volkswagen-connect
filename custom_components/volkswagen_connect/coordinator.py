@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for the Volkswagen EU Data Act integration.
+"""DataUpdateCoordinator for the Volkswagen Connect integration.
 
 Two data sources, merged per vehicle:
   * EU Data Act portal  — 15-min "continuous data" (when the car reports).
@@ -56,7 +56,7 @@ class VehicleData:
     portal_ok: bool = False
 
 
-type EuDataActConfigEntry = ConfigEntry["EuDataActCoordinator"]
+type VolkswagenConnectConfigEntry = ConfigEntry["VolkswagenConnectCoordinator"]
 
 # maintenance/status field -> clean sensor key
 _MAINTENANCE_MAP = {
@@ -69,10 +69,10 @@ _MAINTENANCE_MAP = {
 }
 
 
-class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
+class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
     """Polls the EU Data Act portal (and optionally the website authproxy)."""
 
-    def __init__(self, hass: HomeAssistant, entry: EuDataActConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL)
         self.entry = entry
         self.client = EuDataActClient(

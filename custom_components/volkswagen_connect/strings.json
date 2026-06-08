@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Volkswagen EU Data Act",
-        "description": "Log in with your Volkswagen ID. Before adding, enable a continuous 15-minute data request for your vehicle at https://eu-data-act.drivesomethinggreater.com (Data clusters → Vehicle overview → Get customised data → All data, frequency 15 minutes).",
+        "title": "Volkswagen Connect",
+        "description": "Log in with your Volkswagen ID. You'll get an email verification code (OTP) for the volkswagen.de data source — enter it on the next step. (Optional/experimental: also enable a 15-minute EU Data Act request at https://eu-data-act.drivesomethinggreater.com.)",
         "data": {
           "email": "Email",
           "password": "Password",
@@ -12,7 +12,7 @@
       },
       "otp": {
         "title": "Two-factor code",
-        "description": "Volkswagen emailed a verification code (required for the optional volkswagen.de data source: odometer, service status). Enter it here, or leave the integration with EU Data Act data only by cancelling.",
+        "description": "Volkswagen emailed a verification code for the volkswagen.de data source (battery, charging, odometer, service, warning lights, image). Enter it here. You can cancel to skip it, but then no data is available yet.",
         "data": {
           "otp": "Email code"
         }
@@ -27,7 +27,7 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
-      "cannot_connect": "Could not reach the EU Data Act portal.",
+      "cannot_connect": "Could not connect to Volkswagen. Please try again.",
       "invalid_otp": "That verification code was not accepted. Check the latest email and try again."
     },
     "abort": {

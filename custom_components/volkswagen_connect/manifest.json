@@ -1,0 +1,20 @@
+{
+  "domain": "volkswagen_connect",
+  "name": "Volkswagen Connect",
+  "codeowners": [
+    "@rafaelhutter"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/rafaelhutter/ha-volkswagen-connect",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/rafaelhutter/ha-volkswagen-connect/issues",
+  "loggers": [
+    "custom_components.volkswagen_connect"
+  ],
+  "requirements": [
+    "beautifulsoup4>=4.12.0"
+  ],
+  "version": "0.5.0"
+}

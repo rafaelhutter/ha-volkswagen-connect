@@ -1,10 +1,10 @@
-"""Constants for the Volkswagen EU Data Act integration."""
+"""Constants for the Volkswagen Connect integration."""
 
 from __future__ import annotations
 
 from datetime import timedelta
 
-DOMAIN = "vw_eu_data_act"
+DOMAIN = "volkswagen_connect"
 
 CONF_EMAIL = "email"
 CONF_PASSWORD = "password"

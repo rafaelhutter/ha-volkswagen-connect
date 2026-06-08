@@ -1,4 +1,4 @@
-"""Async client for the Volkswagen EU Data Act portal.
+"""Async client for the Volkswagen Connect portal.
 
 No Home Assistant dependencies — only aiohttp + beautifulsoup4 — so it can be
 unit-tested standalone. Ported from TA2k's ioBroker.vw-connect `lib/euDataAct.js`.

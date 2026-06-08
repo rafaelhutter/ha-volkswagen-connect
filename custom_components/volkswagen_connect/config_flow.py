@@ -1,4 +1,4 @@
-"""Config flow for the Volkswagen EU Data Act integration.
+"""Config flow for the Volkswagen Connect integration.
 
 Steps:
   user           -> email + password + brand; validates the EU Data Act login,
@@ -60,7 +60,7 @@ STEP_USER_SCHEMA = vol.Schema(
 )
 
 
-class EuDataActConfigFlow(ConfigFlow, domain=DOMAIN):
+class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the config flow."""
 
     VERSION = 1

@@ -1,4 +1,4 @@
-"""Sensor platform for the Volkswagen EU Data Act integration.
+"""Sensor platform for the Volkswagen Connect integration.
 
 The EU Data Act payload schema varies by enabled data clusters and is not known
 ahead of time, so value sensors are created dynamically from the flattened
@@ -32,7 +32,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .coordinator import EuDataActConfigEntry, EuDataActCoordinator, VehicleData
+from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
 # Friendly metadata for known (authproxy-derived) keys. Unknown keys still get
 # a generic sensor.
@@ -71,7 +71,7 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: EuDataActConfigEntry,
+    entry: VolkswagenConnectConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
@@ -84,12 +84,12 @@ async def async_setup_entry(
             status_key = (vin, "__status__")
             if status_key not in known:
                 known.add(status_key)
-                new.append(EuDataActStatusSensor(coordinator, vin))
+                new.append(VolkswagenConnectStatusSensor(coordinator, vin))
             for key in vehicle.values:
                 vk = (vin, key)
                 if vk not in known:
                     known.add(vk)
-                    new.append(EuDataActValueSensor(coordinator, vin, key))
+                    new.append(VolkswagenConnectValueSensor(coordinator, vin, key))
         if new:
             async_add_entities(new)
 
@@ -108,10 +108,10 @@ def _device(vehicle: VehicleData) -> DeviceInfo:
     )
 
 
-class _Base(CoordinatorEntity[EuDataActCoordinator], SensorEntity):
+class _Base(CoordinatorEntity[VolkswagenConnectCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: EuDataActCoordinator, vin: str) -> None:
+    def __init__(self, coordinator: VolkswagenConnectCoordinator, vin: str) -> None:
         super().__init__(coordinator)
         self._vin = vin
 
@@ -125,13 +125,13 @@ class _Base(CoordinatorEntity[EuDataActCoordinator], SensorEntity):
         return _device(v) if v else None
 
 
-class EuDataActStatusSensor(_Base):
+class VolkswagenConnectStatusSensor(_Base):
     """Always-present per-vehicle status (ok / no_data / not_configured)."""
 
     _attr_icon = "mdi:database-sync"
     _attr_translation_key = "data_status"
 
-    def __init__(self, coordinator: EuDataActCoordinator, vin: str) -> None:
+    def __init__(self, coordinator: VolkswagenConnectCoordinator, vin: str) -> None:
         super().__init__(coordinator, vin)
         self._attr_unique_id = f"{vin}_data_status"
 
@@ -156,10 +156,10 @@ class EuDataActStatusSensor(_Base):
         }
 
 
-class EuDataActValueSensor(_Base):
+class VolkswagenConnectValueSensor(_Base):
     """A single flattened value from the latest delivered dataset."""
 
-    def __init__(self, coordinator: EuDataActCoordinator, vin: str, key: str) -> None:
+    def __init__(self, coordinator: VolkswagenConnectCoordinator, vin: str, key: str) -> None:
         super().__init__(coordinator, vin)
         self._key = key
         self._attr_unique_id = f"{vin}_{key}"
