@@ -1,0 +1,376 @@
+"""Async client for the Volkswagen EU Data Act portal.
+
+No Home Assistant dependencies — only aiohttp + beautifulsoup4 — so it can be
+unit-tested standalone. Ported from TA2k's ioBroker.vw-connect `lib/euDataAct.js`.
+
+Why this exists: VW retired the WeConnect app OAuth client and now gates the
+CARIAD BFF token exchange behind app attestation (Play Integrity), which an
+open-source client cannot satisfy. The EU Data Act portal is the only remaining
+attestation-free channel: a server-side confidential OAuth client (the portal)
+delivers the vehicle's "continuous data" (15-min interval) per the EU Data Act.
+
+Login is the classic VW Identity `signin-service` OIDC code flow with the
+EU-Data-Act client id `9b58543e-…@apps_vw-dilab_com` and `redirect_uri` pointing
+at the portal, so the portal performs the token exchange — no attestation,
+and (observed) no MFA. Subsequent data calls ride the portal session cookie.
+
+Caller responsibilities:
+  * Pass an aiohttp.ClientSession with its OWN cookie jar (do not share one
+    across integrations) — e.g. aiohttp.ClientSession(cookie_jar=CookieJar()).
+  * The user must first, in a browser, accept consent on the portal, link the
+    vehicle, and enable a continuous 15-min data request — otherwise the
+    vehicle list / metadata is empty (EuDataActNotConfigured).
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import logging
+import re
+import zipfile
+from typing import Any
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+from bs4 import BeautifulSoup
+
+_LOGGER = logging.getLogger(__name__)
+
+BASE_URL = "https://eu-data-act.drivesomethinggreater.com"
+IDENTITY_BASE = "https://identity.vwgroup.io"
+OIDC_AUTHORIZE_URL = f"{IDENTITY_BASE}/oidc/v1/authorize"
+OIDC_SCOPE = "openid cars profile"
+OIDC_REDIRECT_URI = f"{BASE_URL}/login"
+
+# Brand -> OIDC client_id (verified live from the portal's brand selector).
+BRAND_CLIENT_IDS = {
+    "VOLKSWAGEN_PASSENGER_CARS": "9b58543e-1c15-4193-91d5-8a14145bebb0@apps_vw-dilab_com",
+    "VOLKSWAGEN_COMMERCIAL_VEHICLES": "9b58543e-1c15-4193-91d5-8a14145bebb0@apps_vw-dilab_com",
+    "AUDI": "cc29b87a-5e9a-4362-aecf-5adea6b01bbb@apps_vw-dilab_com",
+    "BENTLEY": "d38aac0f-3d89-4a63-8538-b75b31322c7b@apps_vw-dilab_com",
+    "SKODA": "3ea88bf9-1d4e-4a68-b3ad-4098c1f1d246@apps_vw-dilab_com",
+    "SEAT": "f85e5b69-e3b2-43aa-9c0d-1b7d0e0b576f@apps_vw-dilab_com",
+    "CUPRA": "f85e5b69-e3b2-43aa-9c0d-1b7d0e0b576f@apps_vw-dilab_com",
+}
+DEFAULT_BRAND = "VOLKSWAGEN_PASSENGER_CARS"
+
+VEHICLES_PATH = "/proxy_api/consent/me/vehicles"
+RELATION_PATH = "/proxy_api/vum/v2/users/me/relations/{vin}"
+METADATA_PATH = "/proxy_api/euda-apim/datarequest/vehicles/{vin}/metadata/partial"
+LIST_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/list"
+DOWNLOAD_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/download"
+NO_CONTENT_SUFFIX = "_no_content_found.zip"
+
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+)
+
+
+class EuDataActError(Exception):
+    """Base error."""
+
+
+class EuDataActAuthError(EuDataActError):
+    """Login failed (bad credentials, consent screen, throttled, …)."""
+
+
+class EuDataActNotConfigured(EuDataActError):
+    """No continuous data request is set up for the VIN on the portal."""
+
+
+def _extract_template_model(html: str) -> dict:
+    """Pull `window._IDK.templateModel = {…}` (hmac/relayState/email) by brace match."""
+    idx = html.find("templateModel")
+    if idx < 0:
+        return {}
+    brace = html.find("{", idx)
+    if brace < 0:
+        return {}
+    depth = 0
+    for i in range(brace, len(html)):
+        c = html[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(html[brace : i + 1])
+                except json.JSONDecodeError:
+                    return {}
+    return {}
+
+
+def _login_fields(html: str) -> tuple[dict, str | None]:
+    """Extract the signin-service form fields (hidden inputs + hmac/relayState/_csrf)."""
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form")
+    fields: dict[str, str] = {}
+    action: str | None = None
+    if form:
+        action = form.get("action")
+        for inp in form.find_all("input"):
+            name = inp.get("name")
+            if name:
+                fields[name] = inp.get("value", "")
+    model = _extract_template_model(html)
+    for key in ("hmac", "relayState"):
+        if model.get(key):
+            fields[key] = model[key]
+    email = (model.get("emailPasswordForm") or {}).get("email")
+    if email and "email" not in fields:
+        fields["email"] = email
+    if "_csrf" not in fields:
+        m = re.search(r"csrf_token\s*[:=]\s*['\"]([^'\"]+)['\"]", html)
+        if m:
+            fields["_csrf"] = m.group(1)
+    return fields, action
+
+
+def _login_error(html: str) -> str | None:
+    model = _extract_template_model(html)
+    err = model.get("error") or model.get("errorCode")
+    if not err:
+        return None
+    if isinstance(err, dict):
+        return err.get("text") or err.get("errorCode") or json.dumps(err)
+    return str(err)
+
+
+def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
+    """Flatten nested cluster JSON into dotted scalar keys, for sensor creation."""
+    out: dict[str, Any] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            out.update(flatten(v, f"{prefix}.{k}" if prefix else str(k)))
+    elif isinstance(data, list):
+        for i, v in enumerate(data):
+            out.update(flatten(v, f"{prefix}[{i}]"))
+    else:
+        out[prefix] = data
+    return out
+
+
+class EuDataActClient:
+    """Minimal async client for the EU Data Act portal."""
+
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        email: str,
+        password: str,
+        brand: str = DEFAULT_BRAND,
+        country: str = "de",
+        language: str = "en",
+    ) -> None:
+        if brand not in BRAND_CLIENT_IDS:
+            raise ValueError(f"Unknown brand {brand!r}; valid: {list(BRAND_CLIENT_IDS)}")
+        self._session = session
+        self._email = email
+        self._password = password
+        self._brand = brand
+        self._country = country
+        self._language = language
+        self._logged_in = False
+
+    # -- auth ---------------------------------------------------------------
+
+    def _state(self) -> str:
+        return f"{self._country}__{self._language}__{self._brand}"
+
+    def _authorize_url(self) -> str:
+        from urllib.parse import urlencode
+
+        params = {
+            "client_id": BRAND_CLIENT_IDS[self._brand],
+            "response_type": "code",
+            "scope": OIDC_SCOPE,
+            "state": self._state(),
+            "redirect_uri": OIDC_REDIRECT_URI,
+            "prompt": "login",
+        }
+        return f"{OIDC_AUTHORIZE_URL}?{urlencode(params)}"
+
+    async def login(self) -> None:
+        """Run the signin-service OIDC code flow; establishes the portal session."""
+        hdrs = {"User-Agent": USER_AGENT}
+        # 0. prime portal (sets AEM cookies the callback needs)
+        try:
+            await self._session.get(BASE_URL + "/", headers=hdrs)
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("EU Data Act priming GET failed (ignored): %s", err)
+
+        # 1. authorize -> signin-service login page
+        async with self._session.get(self._authorize_url(), headers=hdrs) as resp:
+            page = await resp.text()
+            page_url = str(resp.url)
+        if "signin-service" not in page_url:
+            raise EuDataActAuthError(f"authorize did not reach signin-service (url={page_url})")
+
+        # 2. POST email (identifier step)
+        fields, action = _login_fields(page)
+        if not fields.get("hmac") or not fields.get("_csrf"):
+            raise EuDataActAuthError("could not parse signin form (missing hmac/_csrf)")
+        fields["email"] = self._email
+        async with self._session.post(
+            urljoin(page_url, action or ""), data=fields, headers={**hdrs, "Referer": page_url}
+        ) as resp:
+            page2 = await resp.text()
+            page2_url = str(resp.url)
+
+        # 3. POST password (authenticate step)
+        fields2, action2 = _login_fields(page2)
+        if not fields2.get("hmac"):
+            raise EuDataActAuthError(_login_error(page2) or "no password form (check email address)")
+        fields2["email"] = self._email
+        fields2["password"] = self._password
+        target = urljoin(page2_url, action2) if action2 else page2_url.split("?", 1)[0]
+        async with self._session.post(
+            target, data=fields2, headers={**hdrs, "Referer": page2_url}
+        ) as resp:
+            landing = await resp.text()
+            landing_url = str(resp.url)
+
+        if "signin-service" in landing_url or "/error" in landing_url:
+            raise EuDataActAuthError(_diagnose_login_failure(landing_url, landing))
+        if urlparse(landing_url).hostname != urlparse(BASE_URL).hostname:
+            raise EuDataActAuthError(f"login did not land on portal (url={landing_url})")
+        self._logged_in = True
+        _LOGGER.debug("EU Data Act login OK")
+
+    async def _ensure_login(self) -> None:
+        if not self._logged_in:
+            await self.login()
+
+    # -- HTTP helpers -------------------------------------------------------
+
+    async def _request(self, method: str, url: str, *, headers=None, _retried=False):
+        await self._ensure_login()
+        full = url if url.startswith("http") else BASE_URL + url
+        h = {"User-Agent": USER_AGENT, **(headers or {})}
+        async with self._session.request(method, full, headers=h) as resp:
+            status = resp.status
+            body = await resp.read()
+        # Auth failure OR Adobe-AEM session-expiry (5xx + HTML body) -> re-login once.
+        looks_aem = status >= 500 and body[:1] == b"<"
+        if (status in (401, 403) or looks_aem) and not _retried:
+            _LOGGER.info("EU Data Act %s %s -> %s; re-login + retry", method, full, status)
+            self._logged_in = False
+            await self.login()
+            return await self._request(method, url, headers=headers, _retried=True)
+        return status, body
+
+    async def _get_json(self, url: str, headers=None):
+        status, body = await self._request("GET", url, headers=headers)
+        text = body.decode("utf-8", "replace")
+        if status >= 400:
+            raise EuDataActError(f"GET {url} -> HTTP {status}: {text[:200]}")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as err:
+            raise EuDataActError(f"invalid JSON from {url}: {text[:200]}") from err
+
+    # -- API ----------------------------------------------------------------
+
+    async def list_vehicles(self) -> list[dict]:
+        """Return enrolled vehicles: [{vin, nickName, licensePlate, role, enrollmentStatus, …}]."""
+        payload = await self._get_json(VEHICLES_PATH + "?viewPosition=FRONT_LEFT")
+        return payload if isinstance(payload, list) else payload.get("vehicles", [])
+
+    async def get_metadata(self, vin: str) -> dict:
+        """Return the configured data-request package for a VIN.
+
+        Raises EuDataActNotConfigured if the user has not enabled a data request.
+        """
+        try:
+            meta = await self._get_json(METADATA_PATH.format(vin=vin))
+        except EuDataActError as err:
+            if "No data request" in str(err):
+                raise EuDataActNotConfigured(
+                    f"No continuous data request configured for {vin}. Enable one at {BASE_URL}."
+                ) from err
+            raise
+        if isinstance(meta, list):
+            meta = meta[0] if meta else {}
+        return meta
+
+    async def list_datasets(self, vin: str, identifier: str) -> list[dict]:
+        data = await self._get_json(
+            LIST_PATH.format(vin=vin, identifier=identifier), headers={"type": "partial"}
+        )
+        files = data.get("files") if isinstance(data, dict) else data
+        return files if isinstance(files, list) else []
+
+    async def download_dataset(self, vin: str, identifier: str, name: str) -> dict:
+        """Download one dataset ZIP and return the parsed inner JSON (merged)."""
+        if name.endswith(NO_CONTENT_SUFFIX):
+            raise EuDataActError(f"{name} contains no content")
+        status, body = await self._request(
+            "GET",
+            DOWNLOAD_PATH.format(vin=vin, identifier=identifier),
+            headers={"filename": name, "type": "partial"},
+        )
+        if status >= 400:
+            raise EuDataActError(f"download {name} -> HTTP {status}")
+        merged: dict[str, Any] = {}
+        with zipfile.ZipFile(io.BytesIO(body)) as zf:
+            for inner in zf.namelist():
+                if not inner.endswith(".json"):
+                    continue
+                try:
+                    merged[inner] = json.loads(zf.read(inner))
+                except json.JSONDecodeError:
+                    _LOGGER.debug("EU Data Act: %s not valid JSON, skipped", inner)
+        return merged
+
+    async def get_latest(self, vin: str, identifier: str | None = None) -> dict | None:
+        """Convenience: newest content dataset for a VIN, parsed + flattened.
+
+        Returns {identifier, dataset, created_on, raw, values} or None when no
+        content has been delivered yet (e.g. car idle / request just activated).
+        """
+        if identifier is None:
+            identifier = (await self.get_metadata(vin)).get("Identifier")
+        if not identifier:
+            return None
+        datasets = await self.list_datasets(vin, identifier)
+        content = [d for d in datasets if d.get("name") and not d["name"].endswith(NO_CONTENT_SUFFIX)]
+        if not content:
+            return None
+        newest = max(content, key=lambda d: str(d.get("createdOn") or d.get("name")))
+        raw = await self.download_dataset(vin, identifier, newest["name"])
+        return {
+            "identifier": identifier,
+            "dataset": newest["name"],
+            "created_on": newest.get("createdOn"),
+            "raw": raw,
+            "values": flatten(raw),
+        }
+
+
+def _diagnose_login_failure(url: str, body: str) -> str:
+    if "/signin-service/v1/consent/" in url or "consent-screen" in (body or ""):
+        return (
+            "EU Data Act portal not yet authorised for this account. Open "
+            f"{BASE_URL}/ in a browser, log in, click Allow on the consent screen, "
+            "and finish portal setup (vehicle linking + continuous 15-min data request)."
+        )
+    code = ""
+    try:
+        from urllib.parse import parse_qs
+
+        code = parse_qs(urlparse(url).query).get("error", [""])[0]
+    except (ValueError, KeyError):
+        pass
+    code = code or _login_error(body) or ""
+    if re.search(r"password_invalid", code, re.I):
+        return "Login failed: password incorrect."
+    if re.search(r"email_invalid|user_id|identifier", code, re.I):
+        return "Login failed: email not recognised by VW Identity."
+    if re.search(r"throttle|rate_limit|too_many", code, re.I):
+        return "Login failed: too many attempts, throttled by VW. Wait ~30 min."
+    if re.search(r"account_disabled|locked|blocked", code, re.I):
+        return "Login failed: VW account locked/disabled."
+    return f"Login failed: {code}" if code else f"Login failed (no error code). URL: {url}"

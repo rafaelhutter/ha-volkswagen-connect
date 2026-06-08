@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Volkswagen EU Data Act",
+        "description": "Log in with your Volkswagen ID. Before adding, enable a continuous 15-minute data request for your vehicle at https://eu-data-act.drivesomethinggreater.com (Data clusters → Vehicle overview → Get customised data → All data, frequency 15 minutes).",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "brand": "Brand"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "Enter the password for {email} again.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Could not reach the EU Data Act portal."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "selector": {
+    "brand": {
+      "options": {
+        "VOLKSWAGEN_PASSENGER_CARS": "Volkswagen (Passenger Cars)",
+        "VOLKSWAGEN_COMMERCIAL_VEHICLES": "Volkswagen Commercial Vehicles",
+        "AUDI": "Audi",
+        "BENTLEY": "Bentley",
+        "SKODA": "Škoda",
+        "SEAT": "SEAT",
+        "CUPRA": "CUPRA"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "data_status": {
+        "name": "Data status",
+        "state": {
+          "ok": "OK",
+          "no_data": "No data yet",
+          "not_configured": "No data request configured"
+        }
+      }
+    }
+  }
+}
