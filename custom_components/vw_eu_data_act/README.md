@@ -105,5 +105,11 @@ One device per vehicle, with:
 
 ## Credits
 
+A spiritual successor to robinostlund's
+[`volkswagencarnet`](https://github.com/robinostlund/volkswagencarnet) — the
+long-standing Home Assistant VW integration that VW's 2026 app-attestation lock
+broke. This integration restores read-only data through the
+attestation-free channels.
+
 Flow reverse-engineered with reference to TA2k's `ioBroker.vw-connect`
 (`lib/euDataAct.js`).
