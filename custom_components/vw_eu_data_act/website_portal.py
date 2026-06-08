@@ -210,12 +210,13 @@ class WebsitePortalClient:
 
     # -- data ---------------------------------------------------------------
 
-    async def _get(self, path: str, accept: str = "application/json") -> tuple[int, str]:
-        csrf = self._csrf()
+    async def _get(
+        self, path: str, accept: str = "application/json", _retried: bool = False
+    ) -> tuple[int, str]:
         headers = {
             "User-Agent": UA,
             "Accept": accept,
-            "x-csrf-token": csrf or "",
+            "x-csrf-token": self._csrf() or "",
             "user-id": "__userId__",
             "traceId": uuid.uuid4().hex,
             "Referer": REFERER,
@@ -223,7 +224,22 @@ class WebsitePortalClient:
         async with self._session.get(
             PORTAL + path, headers=headers, allow_redirects=False
         ) as r:
-            return r.status, await r.text()
+            status = r.status
+            location = r.headers.get("Location", "")
+            body = await r.text()
+        # Session expired -> re-auth once via the SSO cookie and retry. Detected
+        # as 401/403, a redirect to the login/authorize pages, or an AEM HTML
+        # error (5xx + '<'). refresh() raises WebsitePortalAuthError if the SSO
+        # itself is gone, which the caller turns into a "reconfigure" notice.
+        login_redirect = status in (301, 302, 303, 307, 308) and any(
+            s in location for s in ("/u/login", "/signin-service", "/authorize")
+        )
+        if not _retried and (
+            status in (401, 403) or login_redirect or (status >= 500 and body[:1] == "<")
+        ):
+            await self.refresh()
+            return await self._get(path, accept, _retried=True)
+        return status, body
 
     async def get_first_vin(self) -> str | None:
         status, body = await self._get(

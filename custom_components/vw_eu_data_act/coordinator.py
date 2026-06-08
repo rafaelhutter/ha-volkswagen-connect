@@ -129,20 +129,12 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
         return result
 
     async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
-        """Best-effort: enrich vehicles with portal data. Never blocks setup."""
+        """Best-effort: enrich vehicles with portal data. Never blocks setup.
+
+        Uses the persisted session directly; the client re-authenticates on
+        demand (only if a request shows the session has expired).
+        """
         assert self.portal is not None
-        try:
-            await self.portal.refresh()
-        except WebsitePortalAuthError as err:
-            _LOGGER.warning(
-                "Website portal session expired (%s). Odometer/service data is paused; "
-                "open the integration and Reconfigure to restore it.",
-                err,
-            )
-            return
-        except Exception as err:  # noqa: BLE001 - portal must never break EU Data Act
-            _LOGGER.warning("Website portal refresh failed, skipping this cycle: %s", err)
-            return
         try:
             # If EU Data Act surfaced no vehicles, discover the VIN via the portal.
             if not result:
@@ -159,10 +151,16 @@ class EuDataActCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
                     if info.get(k) and not data.info.get(k):
                         data.info[k] = info[k]
                 data.portal_ok = True
-            # Persist the refreshed cookies for the next restart.
+            # Persist the (possibly refreshed) cookies for the next restart.
             self.hass.config_entries.async_update_entry(
                 self.entry,
                 data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
             )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Website portal data fetch failed: %s", err)
+        except WebsitePortalAuthError as err:
+            _LOGGER.warning(
+                "Website portal session expired (%s). Odometer/service data is paused; "
+                "open the integration and Reconfigure to restore it.",
+                err,
+            )
+        except Exception as err:  # noqa: BLE001 - portal must never break EU Data Act
+            _LOGGER.warning("Website portal update failed, skipping this cycle: %s", err)
