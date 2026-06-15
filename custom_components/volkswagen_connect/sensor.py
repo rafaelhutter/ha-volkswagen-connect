@@ -9,6 +9,7 @@ delivered.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -33,6 +34,14 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
+
+_LOGGER = logging.getLogger(__name__)
+
+# Hard cap on dynamically-created value sensors per vehicle. The portal data uses
+# a small fixed set of clean keys; this only ever bites if the EU Data Act payload
+# produces an unexpectedly wide/unstable key set. It is a backstop against runaway
+# entity creation — better to drop extra keys (logged) than to flood Home Assistant.
+MAX_VALUE_SENSORS_PER_VEHICLE = 100
 
 # Friendly metadata for known (authproxy-derived) keys. Unknown keys still get
 # a generic sensor.
@@ -77,6 +86,9 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     known: set[tuple[str, str]] = set()
 
+    # Per-vehicle count of value sensors already created, to enforce the cap.
+    value_count: dict[str, int] = {}
+
     @callback
     def _add_new() -> None:
         new: list[SensorEntity] = []
@@ -87,9 +99,25 @@ async def async_setup_entry(
                 new.append(VolkswagenConnectStatusSensor(coordinator, vin))
             for key in vehicle.values:
                 vk = (vin, key)
-                if vk not in known:
-                    known.add(vk)
-                    new.append(VolkswagenConnectValueSensor(coordinator, vin, key))
+                if vk in known:
+                    continue
+                # Known keys (the curated portal set) are always allowed; only
+                # unrecognised keys count against the cap, so live telemetry can
+                # never be starved by a noisy EU Data Act payload.
+                if key not in KNOWN_KEYS and value_count.get(vin, 0) >= MAX_VALUE_SENSORS_PER_VEHICLE:
+                    _LOGGER.warning(
+                        "Vehicle %s already has %d dynamic sensors; skipping extra key %r "
+                        "to avoid flooding Home Assistant. This usually means the EU Data Act "
+                        "payload changed shape — please open an issue.",
+                        vin,
+                        MAX_VALUE_SENSORS_PER_VEHICLE,
+                        key,
+                    )
+                    continue
+                known.add(vk)
+                if key not in KNOWN_KEYS:
+                    value_count[vin] = value_count.get(vin, 0) + 1
+                new.append(VolkswagenConnectValueSensor(coordinator, vin, key))
         if new:
             async_add_entities(new)
 

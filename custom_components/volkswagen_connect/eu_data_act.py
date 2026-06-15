@@ -140,17 +140,40 @@ def _login_error(html: str) -> str | None:
 
 
 def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
-    """Flatten nested cluster JSON into dotted scalar keys, for sensor creation."""
+    """Flatten nested cluster JSON into dotted scalar keys, for sensor creation.
+
+    Lists are collapsed to their *last* element under the same (index-free) key
+    rather than expanded by position. The EU Data Act "continuous data" payload
+    is largely time-series — a growing list of timestamped samples — so indexed
+    keys (``foo[0]``, ``foo[1]``, …) would change on every delivery and spawn an
+    unbounded stream of brand-new sensors. Collapsing to the latest sample keeps
+    one stable key per signal (its most recent value), which is what a sensor
+    should track anyway.
+    """
     out: dict[str, Any] = {}
     if isinstance(data, dict):
         for k, v in data.items():
             out.update(flatten(v, f"{prefix}.{k}" if prefix else str(k)))
     elif isinstance(data, list):
-        for i, v in enumerate(data):
-            out.update(flatten(v, f"{prefix}[{i}]"))
-    else:
+        if data:
+            out.update(flatten(data[-1], prefix))
+    elif prefix:
         out[prefix] = data
     return out
+
+
+def _stable_dataset_key(filename: str) -> str:
+    """Reduce a dataset filename to a stable cluster name.
+
+    Strips the ``.json`` extension and any trailing timestamp/date suffix, e.g.
+    ``vehiclestatus_2026-06-14T12-00-00Z.json`` -> ``vehiclestatus``, so the same
+    logical cluster maps to the same sensor key across the 15-min deliveries
+    instead of minting a fresh key namespace every time.
+    """
+    name = filename.rsplit("/", 1)[-1]
+    name = re.sub(r"\.json$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"[_-]?\d{4}[-_]\d.*$", "", name)
+    return name or "data"
 
 
 class EuDataActClient:
@@ -341,12 +364,16 @@ class EuDataActClient:
             return None
         newest = max(content, key=lambda d: str(d.get("createdOn") or d.get("name")))
         raw = await self.download_dataset(vin, identifier, newest["name"])
+        # Re-key the per-file payload by a stable cluster name (the raw filenames
+        # carry the delivery timestamp) before flattening, so a given signal
+        # keeps the same sensor key across deliveries.
+        stable = {_stable_dataset_key(name): doc for name, doc in raw.items()}
         return {
             "identifier": identifier,
             "dataset": newest["name"],
             "created_on": newest.get("createdOn"),
             "raw": raw,
-            "values": flatten(raw),
+            "values": flatten(stable),
         }
 
 

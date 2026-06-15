@@ -231,17 +231,26 @@ class WebsitePortalClient:
             location = r.headers.get("Location", "")
             body = await r.text()
         # Session expired -> re-auth once via the SSO cookie and retry. Detected
-        # as 401/403, a redirect to the login/authorize pages, or an AEM HTML
-        # error (5xx + '<'). refresh() raises WebsitePortalAuthError if the SSO
-        # itself is gone, which the caller turns into a "reconfigure" notice.
+        # as 401/403/412/428, a redirect to the login/authorize pages, or an AEM
+        # HTML error (5xx + '<'). The authproxy answers a *stale* session with
+        # 412 Precondition Failed (not 401), so without it here every endpoint
+        # silently returned {} and the user saw no entities. refresh() raises
+        # WebsitePortalAuthError if the SSO itself is gone, which the caller turns
+        # into a "reconfigure" notice.
         login_redirect = status in (301, 302, 303, 307, 308) and any(
             s in location for s in ("/u/login", "/signin-service", "/authorize")
         )
-        if not _retried and (
-            status in (401, 403) or login_redirect or (status >= 500 and body[:1] == "<")
-        ):
+        auth_failed = status in (401, 403, 412, 428)
+        if not _retried and (auth_failed or login_redirect or (status >= 500 and body[:1] == "<")):
             await self.refresh()
             return await self._get(path, accept, _retried=True)
+        # Still rejected after a fresh session -> the session is genuinely dead.
+        # Surface it so the coordinator prompts a reconfigure instead of quietly
+        # returning empty data for every endpoint.
+        if _retried and (auth_failed or login_redirect):
+            raise WebsitePortalAuthError(
+                f"portal session rejected (HTTP {status}) after refresh; re-auth required"
+            )
         return status, body
 
     async def get_first_vin(self) -> str | None:
