@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BRAND,
@@ -57,6 +58,7 @@ class VehicleData:
     identifier: str | None = None
     dataset: str | None = None
     created_on: str | None = None
+    captured_at: str | None = None
     values: dict[str, Any] = field(default_factory=dict)
     image_url: str | None = None
     portal_ok: bool = False
@@ -85,7 +87,33 @@ _PORTAL_DUPLICATES = {
     "charge_rate": ("battery_state_report.charge_rate",),
     "charging_state": ("charging_state_report.current_charge_state",),
     "charge_mode": ("charging_state_report.charge_mode",),
+    "charge_time_remaining": ("battery_state_report.remaining_charging_time_complete",),
 }
+
+# EU Data Act fields carrying the moment the car *captured* the data (as opposed
+# to when the portal delivered it, which is always fresh). Newest one wins.
+_CAPTURE_FIELDS = (
+    "car_captured_time",
+    "instrument_cluster_time",
+    "profile_state_report.car_captured_time",
+    "profile_state_report.instrument_cluster_time",
+    "car_captured_utc_timestamp",
+)
+
+
+def _best_captured_at(values: dict[str, Any]) -> str | None:
+    """Most recent 'captured by the car' timestamp in an EU Data Act dataset.
+
+    The dataset's *delivery* time is always current, but the underlying capture
+    can lag hours while the car is parked. Surfacing the newest capture time lets
+    the integration (and the user) tell fresh data from a re-delivered snapshot.
+    """
+    best = None
+    for key in _CAPTURE_FIELDS:
+        parsed = dt_util.parse_datetime(str(values.get(key) or ""))
+        if parsed is not None and (best is None or parsed > best):
+            best = parsed
+    return best.isoformat() if best else None
 
 
 class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
@@ -138,6 +166,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                     data.dataset = latest["dataset"]
                     data.created_on = latest["created_on"]
                     data.values = dict(latest["values"])
+                    data.captured_at = _best_captured_at(data.values)
             except EuDataActNotConfigured:
                 data.status = STATUS_NOT_CONFIGURED
             except EuDataActAuthError as err:

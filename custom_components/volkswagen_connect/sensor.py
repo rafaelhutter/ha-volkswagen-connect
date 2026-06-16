@@ -44,6 +44,11 @@ _LOGGER = logging.getLogger(__name__)
 # entity creation — better to drop extra keys (logged) than to flood Home Assistant.
 MAX_VALUE_SENSORS_PER_VEHICLE = 100
 
+# EU Data Act data older than this (measured at the car, not when the portal
+# delivered it) is flagged stale on the Data status sensor. The portal delivers
+# every 15 min, so 30 min = the car hasn't reported in two cycles.
+STALE_AFTER_MINUTES = 30
+
 # Friendly metadata for known (authproxy-derived) keys. Unknown keys still get
 # a generic sensor.
 KNOWN_KEYS: dict[str, dict[str, Any]] = {
@@ -207,6 +212,7 @@ async def async_setup_entry(
             if status_key not in known:
                 known.add(status_key)
                 new.append(VolkswagenConnectStatusSensor(coordinator, vin))
+                new.append(VolkswagenConnectCapturedSensor(coordinator, vin))
             for key in vehicle.values:
                 vk = (vin, key)
                 if vk in known:
@@ -283,7 +289,7 @@ class VolkswagenConnectStatusSensor(_Base):
         v = self._vehicle
         if not v:
             return {}
-        return {
+        attrs: dict[str, Any] = {
             "vin": v.vin,
             "nickname": v.info.get("nickName"),
             "license_plate": v.info.get("licensePlate"),
@@ -291,7 +297,43 @@ class VolkswagenConnectStatusSensor(_Base):
             "data_request_id": v.identifier,
             "latest_dataset": v.dataset,
             "created_on": v.created_on,
+            "captured_at": v.captured_at,
         }
+        # Freshness: the dataset is delivered every 15 min, but its content can be
+        # hours old while the car is parked. Surface the captured-data age so a
+        # stale EU reading is obvious (the live battery/charging/odometer signals
+        # already fall back to the fresh portal source via the coordinator).
+        captured = dt_util.parse_datetime(v.captured_at) if v.captured_at else None
+        if captured is not None:
+            age_min = (dt_util.utcnow() - captured).total_seconds() / 60
+            attrs["data_age_minutes"] = round(age_min, 1)
+            attrs["stale"] = age_min > STALE_AFTER_MINUTES
+        return attrs
+
+
+class VolkswagenConnectCapturedSensor(_Base):
+    """When the car actually captured the latest EU Data Act data.
+
+    The dataset is *delivered* every 15 min, but the readings inside can be hours
+    old while the car is parked, so this surfaces the true measurement time. Home
+    Assistant renders it as a relative age ("4 hours ago"), making a stale feed
+    obvious at a glance and easy to automate on.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:car-clock"
+    _attr_name = "Data captured"
+
+    def __init__(self, coordinator: VolkswagenConnectCoordinator, vin: str) -> None:
+        super().__init__(coordinator, vin)
+        self._attr_unique_id = f"{vin}_data_captured"
+
+    @property
+    def native_value(self) -> StateType:
+        v = self._vehicle
+        if not v or not v.captured_at:
+            return None
+        return dt_util.parse_datetime(v.captured_at)
 
 
 class VolkswagenConnectValueSensor(_Base):
