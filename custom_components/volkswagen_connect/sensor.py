@@ -10,6 +10,7 @@ delivered.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -111,6 +112,63 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
     "settings.max_charge_current_ac": {"name": "Max AC charge current", "icon": "mdi:current-ac"},
     "settings.charge_mode_selection": {"name": "Charge mode selection", "icon": "mdi:cog-outline"},
 }
+
+
+# Leading category prefixes on VW enum values, stripped before humanising so
+# CHARGE_STATE_NOT_READY_FOR_CHARGING -> "Not ready for charging". Longest /
+# most-specific first (CHARGE_MODE_SELECTION_ must beat CHARGE_MODE_).
+_ENUM_PREFIXES = (
+    "CHARGE_MODE_SELECTION_",
+    "MAX_CHARGE_CURRENT_AC_",
+    "IMMEDIATE_ACTION_STATE_",
+    "WINDOW_HEATING_STATE_",
+    "TARGET_REACHABILITY_",
+    "PLUG_CONNECTION_STATE_",
+    "CHARGING_SCENARIO_",
+    "BCAM_ACTIVATION_",
+    "AUTO_UNLOCK_AC_",
+    "PLUG_LOCK_STATE_",
+    "CHARGE_RATE_UNIT_",
+    "CHARGE_STATE_",
+    "CHARGE_TYPE_",
+    "CHARGE_MODE_",
+)
+
+# Exact-value overrides where prefix-strip + sentence-case wouldn't read well
+# (acronyms, units, glued words).
+_VALUE_OVERRIDES = {
+    "CHARGE_TYPE_AC": "AC",
+    "CHARGE_TYPE_DC": "DC",
+    "CHARGE_RATE_UNIT_KM_PER_H": "km/h",
+    "CHARGE_MODE_IMMEDIATELY_DEFAULT": "Immediate (default)",
+    "CHARGE_MODE_SELECTION_IMMEDIATECHARGING": "Immediate charging",
+    "VALID": "Valid",
+    "INVALID": "Invalid",
+}
+
+
+def _humanize_value(value: Any) -> Any:
+    """Turn a VW enum code into a readable string.
+
+    e.g. ``CHARGE_STATE_NOT_READY_FOR_CHARGING`` -> ``Not ready for charging``,
+    ``WINDOW_HEATING_STATE_OFF`` -> ``Off``. Non-enum values are returned
+    unchanged; the original code stays available as the ``raw_value`` attribute.
+    """
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if s in _VALUE_OVERRIDES:
+        return _VALUE_OVERRIDES[s]
+    # Only touch SCREAMING_SNAKE enum codes (need at least one underscore).
+    if "_" not in s or not re.fullmatch(r"[A-Z][A-Z0-9_]+", s):
+        return value
+    body = s
+    for prefix in _ENUM_PREFIXES:
+        if s.startswith(prefix) and len(s) > len(prefix):
+            body = s[len(prefix):]
+            break
+    body = body.replace("_", " ").lower()
+    return body[:1].upper() + body[1:]
 
 
 def _prettify(key: str) -> str:
@@ -262,7 +320,21 @@ class VolkswagenConnectValueSensor(_Base):
             return dt_util.parse_datetime(val)
         if isinstance(val, bool):
             return str(val).lower()
+        if isinstance(val, str):
+            return _humanize_value(val)
         return val
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the original VW code when the displayed value was humanised,
+        so templates/automations can still match the raw enum."""
+        v = self._vehicle
+        if not v:
+            return None
+        val = v.values.get(self._key)
+        if isinstance(val, str) and _humanize_value(val) != val:
+            return {"raw_value": val}
+        return None
 
     @property
     def available(self) -> bool:
