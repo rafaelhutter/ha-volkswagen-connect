@@ -75,7 +75,54 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
     "plug_connection": {"name": "Plug", "icon": "mdi:power-plug"},
     "plug_lock": {"name": "Plug lock", "icon": "mdi:lock"},
     "external_power": {"name": "External power", "icon": "mdi:transmission-tower"},
+    # --- EU Data Act fields (dataFieldName keys) --------------------------------
+    # Friendly labels + units for the meaningful "continuous data" signals. The
+    # long tail of raw fields keeps its dotted dataFieldName as its label.
+    "mileage.value": {"name": "Mileage", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
+    "battery_level_HV.value": {"name": "Battery level", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.soc": {"name": "Battery state of charge", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.charge_power": {"name": "Charge power (report)", "device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.charge_rate": {"name": "Charge rate (report)", "unit": UnitOfSpeed.KILOMETERS_PER_HOUR, "icon": "mdi:speedometer"},
+    "battery_state_report.charge_energy": {"name": "Charge energy", "icon": "mdi:lightning-bolt"},
+    "battery_care_mode.charge_bcam_threshold": {"name": "Battery care threshold", "unit": PERCENTAGE, "icon": "mdi:battery-heart-variant"},
+    "settings.target_soc": {"name": "Target SoC (setting)", "unit": PERCENTAGE, "icon": "mdi:battery-charging-high"},
+    "outdoor_temperature": {"name": "Outdoor temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT},
+    "min_temperature": {"name": "Climate min temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS},
+    "max_temperature": {"name": "Climate max temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS},
+    "car_captured_time": {"name": "Car captured time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check"},
+    "car_captured_utc_timestamp": {"name": "Car captured (UTC)", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline"},
+    "instrument_cluster_time": {"name": "Instrument cluster time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline"},
+    "locked": {"name": "Locked", "icon": "mdi:lock"},
+    "open": {"name": "Open", "icon": "mdi:car-door"},
+    "parking_brake": {"name": "Parking brake", "icon": "mdi:car-brake-parking"},
+    "parking_light_left": {"name": "Parking light left", "icon": "mdi:car-parking-lights"},
+    "parking_light_right": {"name": "Parking light right", "icon": "mdi:car-parking-lights"},
+    "window_heating_state": {"name": "Window heating", "icon": "mdi:car-defrost-rear"},
+    "remaining_climate_time": {"name": "Remaining climate time", "icon": "mdi:timer-sand"},
+    "additional_consumptions.residual_consumption": {"name": "Residual consumption", "icon": "mdi:flash"},
+    "additional_consumptions.interior_climatization_consumption": {"name": "Climatisation consumption", "icon": "mdi:fan"},
+    "slope_consumption_values.ascent_slope_consumption.physical_value": {"name": "Ascent slope consumption", "icon": "mdi:trending-up"},
+    "slope_consumption_values.descent_slope_consumption.physical_value": {"name": "Descent slope consumption", "icon": "mdi:trending-down"},
+    "energy_contents.current_energy_content.physical_value": {"name": "Current energy content", "icon": "mdi:battery-charging"},
+    "energy_contents.maximal_energy_content.physical_value": {"name": "Maximal energy content", "icon": "mdi:battery"},
+    "charging_state_report.charge_type": {"name": "Charge type", "icon": "mdi:ev-plug-type2"},
+    "charging_state_report.charge_mode": {"name": "Charge mode (report)", "icon": "mdi:cog"},
+    "charging_state_report.current_charge_state": {"name": "Charge state (report)", "icon": "mdi:ev-station"},
+    "settings.max_charge_current_ac": {"name": "Max AC charge current", "icon": "mdi:current-ac"},
+    "settings.charge_mode_selection": {"name": "Charge mode selection", "icon": "mdi:cog-outline"},
 }
+
+
+def _prettify(key: str) -> str:
+    """Turn a raw EU Data Act dataFieldName into a readable label.
+
+    e.g. ``battery_state_report.remaining_charging_time_complete`` ->
+    ``Battery state report remaining charging time complete``. Used for any field
+    without a curated entry in KNOWN_KEYS so the UI never shows a dotted code.
+    """
+    words = key.replace(".", " ").replace("_", " ").split()
+    label = " ".join(words)
+    return label[:1].upper() + label[1:] if label else key
 
 
 async def async_setup_entry(
@@ -192,7 +239,7 @@ class VolkswagenConnectValueSensor(_Base):
         self._key = key
         self._attr_unique_id = f"{vin}_{key}"
         meta = KNOWN_KEYS.get(key, {})
-        self._attr_name = meta.get("name", key)
+        self._attr_name = meta.get("name") or _prettify(key)
         if "device_class" in meta:
             self._attr_device_class = meta["device_class"]
         if "unit" in meta:

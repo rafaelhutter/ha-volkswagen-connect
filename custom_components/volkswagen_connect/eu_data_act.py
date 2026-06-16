@@ -162,18 +162,61 @@ def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
     return out
 
 
-def _stable_dataset_key(filename: str) -> str:
-    """Reduce a dataset filename to a stable cluster name.
+# Envelope/metadata fields in the EU Data Act ``Data`` array that are not vehicle
+# telemetry, so they should not become sensors: account/message identifiers,
+# report bookkeeping, and the bare unqualified fields (``value``/``state``/
+# ``timestamp``) that lost their parent context in VW's flat record list.
+_SKIP_FIELDS = {
+    "vin",
+    "user_id",
+    "key",
+    "message_id",
+    "report_type",
+    "update_reason",
+    "error_code",
+    "state",
+    "value",
+    "timestamp",
+}
 
-    Strips the ``.json`` extension and any trailing timestamp/date suffix, e.g.
-    ``vehiclestatus_2026-06-14T12-00-00Z.json`` -> ``vehiclestatus``, so the same
-    logical cluster maps to the same sensor key across the 15-min deliveries
-    instead of minting a fresh key namespace every time.
+
+def _coerce(value: Any) -> Any:
+    """Turn obviously-numeric string values into int/float so they can graph."""
+    if isinstance(value, str):
+        v = value.strip()
+        if re.fullmatch(r"-?\d+", v):
+            return int(v)
+        if re.fullmatch(r"-?\d*\.\d+", v):
+            return float(v)
+    return value
+
+
+def _extract_values(raw: dict[str, Any]) -> dict[str, Any]:
+    """Turn an EU Data Act dataset into ``{dataFieldName: latest value}``.
+
+    The payload's ``Data`` array is a flat list of ``{key, dataFieldName, value}``
+    records — typically several timestamped samples of the same field. We key by
+    ``dataFieldName`` (which is stable across the 15-min deliveries) and keep the
+    last value seen, so each signal maps to exactly one sensor that tracks its
+    most recent reading. Inner docs that don't use this shape fall back to a
+    generic flatten.
     """
-    name = filename.rsplit("/", 1)[-1]
-    name = re.sub(r"\.json$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"[_-]?\d{4}[-_]\d.*$", "", name)
-    return name or "data"
+    out: dict[str, Any] = {}
+    for doc in raw.values():
+        records = (doc.get("Data") or doc.get("data")) if isinstance(doc, dict) else None
+        if isinstance(records, list):
+            for r in records:
+                if not isinstance(r, dict):
+                    continue
+                name = r.get("dataFieldName") or r.get("datafieldname")
+                # ``*.value_type`` fields are constant enum tags (VALUE_TYPE_PHYSICAL),
+                # not telemetry — drop them so they don't become dead sensors.
+                if not name or name in _SKIP_FIELDS or name.endswith(".value_type"):
+                    continue
+                out[name] = _coerce(r.get("value"))
+        elif isinstance(doc, (dict, list)):
+            out.update(flatten(doc))
+    return out
 
 
 class EuDataActClient:
@@ -364,16 +407,12 @@ class EuDataActClient:
             return None
         newest = max(content, key=lambda d: str(d.get("createdOn") or d.get("name")))
         raw = await self.download_dataset(vin, identifier, newest["name"])
-        # Re-key the per-file payload by a stable cluster name (the raw filenames
-        # carry the delivery timestamp) before flattening, so a given signal
-        # keeps the same sensor key across deliveries.
-        stable = {_stable_dataset_key(name): doc for name, doc in raw.items()}
         return {
             "identifier": identifier,
             "dataset": newest["name"],
             "created_on": newest.get("createdOn"),
             "raw": raw,
-            "values": flatten(stable),
+            "values": _extract_values(raw),
         }
 
 

@@ -118,9 +118,11 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             try:
                 await self._validate_eudataact(user_input)
-            except EuDataActAuthError:
+            except EuDataActAuthError as err:
+                _LOGGER.warning("EU Data Act login rejected during setup: %s", err)
                 errors["base"] = "invalid_auth"
-            except EuDataActError:
+            except EuDataActError as err:
+                _LOGGER.warning("EU Data Act could not connect during setup: %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 self._collected = dict(user_input)
@@ -162,9 +164,11 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             self._collected = {**reauth_entry.data, **user_input}
             try:
                 await self._validate_eudataact(self._collected)
-            except EuDataActAuthError:
+            except EuDataActAuthError as err:
+                _LOGGER.warning("EU Data Act login rejected during reauth: %s", err)
                 errors["base"] = "invalid_auth"
-            except EuDataActError:
+            except EuDataActError as err:
+                _LOGGER.warning("EU Data Act could not connect during reauth: %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 return await self._start_portal()
