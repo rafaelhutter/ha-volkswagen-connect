@@ -1,17 +1,21 @@
 # Volkswagen Connect — Home Assistant integration
 
 A **read-only** Home Assistant integration that pulls your Volkswagen vehicle
-data from your **volkswagen.de** account — battery/charging, odometer,
-service/inspection due, vehicle-health warning lights, lock history, and the
-vehicle image.
+data from two attestation-free channels: your **volkswagen.de** account
+(battery/charging, odometer, service/inspection due, vehicle-health warning
+lights, lock history, vehicle image) and the **EU Data Act portal** (a rich set
+of additional telemetry once you enable a continuous data request).
 
 > Install via **HACS → ⋮ → Custom repositories →**
 > `https://github.com/rafaelhutter/ha-volkswagen-connect` (category *Integration*),
 > then add the **Volkswagen Connect** integration.
 
-> Data comes from the **volkswagen.de website session** (the attestation-free
-> channel). The EU Data Act portal is supported too, but only as a *future /
-> best-effort* source — see [EU Data Act — the future](#eu-data-act--the-future).
+> Both sources are read-only and attestation-free. The volkswagen.de session is
+> the reliable "always there" source; the EU Data Act portal adds a lot more
+> detail once configured — see
+> [EU Data Act — rich vehicle telemetry](#eu-data-act--rich-vehicle-telemetry).
+> Where the two overlap (e.g. battery, odometer) the cleaner volkswagen.de
+> sensor is kept and the duplicate is dropped automatically.
 
 ## Why this exists
 
@@ -67,9 +71,16 @@ One device per vehicle:
   remote lock/unlock from the transaction log (command history, **not** a live
   lock sensor — see Limitations).
 - **Image** — the vehicle's exterior side-view photo.
-- **Data status** — `ok` / `no_data` / `not_configured`. Reflects the optional
-  EU Data Act source (below); reads `not_configured` until/unless that channel
-  delivers and does **not** affect the live data above.
+- **Data status** — `ok` / `no_data` / `not_configured`. Reflects the EU Data Act
+  source (below): `not_configured` until you enable a continuous data request,
+  `ok` once data is delivered. It does **not** affect the volkswagen.de data above.
+- **EU Data Act telemetry** (once configured) — a large set of additional
+  sensors mapped one-per-signal from the delivered dataset: HV battery details,
+  charge timers and settings, climate setpoints, outdoor temperature, slope/
+  residual consumption, parking/light/lock states, and more. Values are made
+  human-readable (e.g. `CHARGE_STATE_NOT_READY_FOR_CHARGING` → *Not ready for
+  charging*), with the original VW code kept on each sensor's `raw_value`
+  attribute for templates/automations.
 
 ## Limitations
 
@@ -81,33 +92,36 @@ One device per vehicle:
   user). The *Last lock command* sensor surfaces the lock/unlock **history**
   instead — treat it as "the last confirmed lock/unlock", not the current state.
 
-## EU Data Act — the future
+## EU Data Act — rich vehicle telemetry
 
 The EU Data Act obliges carmakers to expose vehicle data through a standardized
-portal (`eu-data-act.drivesomethinggreater.com`). In principle that's a cleaner,
-officially-sanctioned channel than reusing the website session — so the
-integration *also* supports it and will surface any delivered fields as dynamic
-**value sensors** (with the **Data status** sensor showing the request state).
+portal (`eu-data-act.drivesomethinggreater.com`). Once you enable a **continuous
+data request** there, the integration receives the delivered dataset every ~15
+minutes and turns it into sensors — one per signal, tracking the latest value.
 
-**In practice it does not reliably work today:** the portal's delivery is flaky,
-frequently returns nothing, and depends on the car reporting into a 15-minute
-slot. So it's kept as a **future / best-effort** option, not the primary source.
-To experiment with it:
+This is a **rich** source: HV battery state, charge power/rate/energy and timers,
+charge-mode settings, climate setpoints, outdoor temperature, slope and residual
+consumption, parking/light/door-lock states, and more. Cryptic VW enum codes are
+shown human-readable (the raw code stays on each sensor's `raw_value` attribute),
+and fields that duplicate a volkswagen.de sensor are dropped automatically.
+
+**One-time setup (in a browser):**
 
 1. Go to **https://eu-data-act.drivesomethinggreater.com**, log in with your
    Volkswagen ID, accept the consent screen, and link your vehicle.
 2. Enable a **continuous data request**: *Data clusters → Vehicle overview →
    Get customised data → **All data**, frequency **15 minutes***.
 
-If/when VW's portal becomes dependable, this is the channel to lean on — until
-then, rely on the volkswagen.de data above.
+Until you do this, the **Data status** sensor reads `not_configured` and only the
+volkswagen.de sensors appear. Delivery depends on the car reporting in, so values
+update roughly every 15 minutes (not real-time).
 
 ## Supported brands
 
-The working **volkswagen.de** source is **Volkswagen** only. The brand selector
-feeds the (future) EU Data Act client, which also targets Audi, Škoda, SEAT,
-CUPRA and Bentley via their portal OAuth clients — subject to the same
-reliability caveat above.
+The **volkswagen.de** source is **Volkswagen** only. The brand selector feeds the
+EU Data Act client, which also targets Audi, Škoda, SEAT, CUPRA and Bentley via
+their portal OAuth clients (developed and tested against Volkswagen; other brands
+should work but are unverified).
 
 ## Credits
 
