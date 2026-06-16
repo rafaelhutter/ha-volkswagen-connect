@@ -74,6 +74,19 @@ _MAINTENANCE_MAP = {
     "carCapturedTimestamp": "last_report",
 }
 
+# portal sensor key -> EU Data Act dataFieldName(s) that report the same signal.
+# When the portal (cleaner, with units/device-classes) delivers the value, the
+# raw EU Data Act duplicate is dropped. Only applied when the portal value is
+# actually present, so nothing disappears if the portal is unavailable.
+_PORTAL_DUPLICATES = {
+    "odometer": ("mileage.value",),
+    "soc": ("battery_level_HV.value", "battery_state_report.soc"),
+    "charge_power": ("battery_state_report.charge_power",),
+    "charge_rate": ("battery_state_report.charge_rate",),
+    "charging_state": ("charging_state_report.current_charge_state",),
+    "charge_mode": ("charging_state_report.charge_mode",),
+}
+
 
 class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]):
     """Polls the website authproxy (and optionally the EU Data Act portal)."""
@@ -208,6 +221,11 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
                     if info.get(k) and not data.info.get(k):
                         data.info[k] = info[k]
+                # Drop EU Data Act fields that duplicate a portal signal we got.
+                for portal_key, eu_fields in _PORTAL_DUPLICATES.items():
+                    if data.values.get(portal_key) is not None:
+                        for field in eu_fields:
+                            data.values.pop(field, None)
                 data.portal_ok = True
         except WebsitePortalAuthError as err:
             _LOGGER.warning(

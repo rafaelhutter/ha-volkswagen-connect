@@ -181,13 +181,18 @@ _SKIP_FIELDS = {
 
 
 def _coerce(value: Any) -> Any:
-    """Turn obviously-numeric string values into int/float so they can graph."""
+    """Turn obviously-numeric string values into int/float so they can graph.
+
+    Also unwraps the ``<n>s`` second-duration form VW uses (e.g. ``6900s``).
+    """
     if isinstance(value, str):
         v = value.strip()
         if re.fullmatch(r"-?\d+", v):
             return int(v)
         if re.fullmatch(r"-?\d*\.\d+", v):
             return float(v)
+        if re.fullmatch(r"\d+s", v):  # "6900s" -> 6900 (seconds)
+            return int(v[:-1])
     return value
 
 
@@ -209,9 +214,11 @@ def _extract_values(raw: dict[str, Any]) -> dict[str, Any]:
                 if not isinstance(r, dict):
                     continue
                 name = r.get("dataFieldName") or r.get("datafieldname")
-                # ``*.value_type`` fields are constant enum tags (VALUE_TYPE_PHYSICAL),
-                # not telemetry — drop them so they don't become dead sensors.
-                if not name or name in _SKIP_FIELDS or name.endswith(".value_type"):
+                # Drop non-telemetry fields: ``*.value_type`` constant tags
+                # (VALUE_TYPE_PHYSICAL) and ``*_unit`` descriptors that just name
+                # another field's unit (e.g. charge_rate_unit) — neither is a
+                # useful sensor.
+                if not name or name in _SKIP_FIELDS or name.endswith((".value_type", "_unit")):
                     continue
                 out[name] = _coerce(r.get("value"))
         elif isinstance(doc, (dict, list)):
