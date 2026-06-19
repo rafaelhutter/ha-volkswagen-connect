@@ -4,3 +4,7 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 .vwpass
+
+# Private maintainer guidelines for Claude (auto-loaded, never published)
+CLAUDE.md
+tasks/
