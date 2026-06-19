@@ -208,8 +208,11 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             await self.portal.refresh()
             self._last_refresh = time.monotonic()
             self._persist_portal_cookies()
-        except WebsitePortalAuthError:
-            _LOGGER.debug("Session refresh: SSO not usable yet; trying existing session")
+        except WebsitePortalAuthError as err:
+            _LOGGER.debug(
+                "Session refresh: SSO not usable yet (%s); trying existing session",
+                err,
+            )
         except Exception as err:  # noqa: BLE001 - never block on a refresh hiccup
             _LOGGER.debug("Session refresh failed (continuing): %s", err)
 
@@ -228,6 +231,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         assert self.portal is not None
         await self.async_refresh_session()
 
+        session_dead = False
         try:
             # If EU Data Act surfaced no vehicles, discover the VIN via the portal.
             if not result:
@@ -257,6 +261,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                             data.values.pop(field, None)
                 data.portal_ok = True
         except WebsitePortalAuthError as err:
+            session_dead = True
             _LOGGER.warning(
                 "Website portal session expired (%s). Live data is paused; "
                 "open the integration and Reconfigure to restore it.",
@@ -265,9 +270,11 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         except Exception as err:  # noqa: BLE001 - portal must never break EU Data Act
             _LOGGER.warning("Website portal update failed, skipping this cycle: %s", err)
         finally:
-            # Always persist the freshest cookies — the rolled SSO must survive a
-            # restart even if this cycle's data calls happened to fail.
-            try:
-                self._persist_portal_cookies()
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("Could not persist portal cookies: %s", err)
+            # Persist the freshest cookies so the rolled SSO survives a restart —
+            # but only while the session is still alive. Saving a known-dead set
+            # over a good one just guarantees the next start also fails.
+            if not session_dead:
+                try:
+                    self._persist_portal_cookies()
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Could not persist portal cookies: %s", err)

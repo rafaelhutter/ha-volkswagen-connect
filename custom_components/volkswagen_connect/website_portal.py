@@ -92,27 +92,55 @@ class WebsitePortalClient:
 
     # -- cookie persistence -------------------------------------------------
 
-    # Hosts the session spans. We can't reliably recover the per-cookie host
-    # for host-only cookies (aiohttp exposes an empty domain for them), so on
-    # import we broadcast every cookie to BOTH hosts. Sending an extra cookie a
-    # host doesn't expect is harmless; the win is that the `auth0` SSO cookie
-    # reliably reaches identity.vwgroup.io (it previously got misfiled under
-    # www.volkswagen.de, breaking silent refresh).
+    # Hosts the session spans. Used as the broadcast fallback for legacy
+    # (pre-0.5.9) persisted cookies that carry no domain.
     _HOSTS = ("https://www.volkswagen.de/", "https://identity.vwgroup.io/")
 
     def export_cookies(self) -> list[dict[str, str]]:
-        seen: dict[str, str] = {}
+        """Persist cookies as (domain, key, value) triples.
+
+        Keyed by (domain, key) — NOT key alone — so a cookie that exists on
+        both www.volkswagen.de and identity.vwgroup.io (VW's stack reuses
+        cookie names across hosts) no longer clobbers its twin. Collapsing on
+        the bare key was corrupting the identity-host SSO cookie on every
+        persist, which silently broke the silent refresh and forced a re-login.
+        """
+        seen: dict[tuple[str, str], str] = {}
         for cookie in self._session.cookie_jar:
-            seen[cookie.key] = cookie.value
-        return [{"key": k, "value": v} for k, v in seen.items()]
+            domain = cookie["domain"] or ""
+            seen[(domain, cookie.key)] = cookie.value
+        return [{"domain": d, "key": k, "value": v} for (d, k), v in seen.items()]
 
     def import_cookies(self, data: list[dict[str, str]]) -> None:
-        sc: SimpleCookie = SimpleCookie()
+        """Restore cookies to their origin host.
+
+        The 0.5.9+ format carries a per-cookie ``domain``; each cookie is filed
+        back on its own host (a dotted domain like ``.vwgroup.io`` stays a
+        domain cookie). Legacy entries without a domain are broadcast to both
+        hosts — the old best-effort behaviour — so existing installs keep
+        working until the next persist upgrades them in place.
+        """
+        legacy: SimpleCookie = SimpleCookie()
         for c in data:
-            if c.get("key"):
-                sc[c["key"]] = c.get("value", "")
-        for host in self._HOSTS:
-            self._session.cookie_jar.update_cookies(sc, URL(host))
+            key = c.get("key")
+            if not key:
+                continue
+            value = c.get("value", "")
+            domain = (c.get("domain") or "").strip()
+            if not domain:
+                legacy[key] = value
+                continue
+            sc: SimpleCookie = SimpleCookie()
+            sc[key] = value
+            sc[key]["path"] = "/"
+            if domain.startswith("."):
+                sc[key]["domain"] = domain
+            self._session.cookie_jar.update_cookies(
+                sc, URL(f"https://{domain.lstrip('.')}/")
+            )
+        if legacy:
+            for host in self._HOSTS:
+                self._session.cookie_jar.update_cookies(legacy, URL(host))
 
     def _csrf(self) -> str | None:
         for cookie in self._session.cookie_jar:
@@ -196,6 +224,13 @@ class WebsitePortalClient:
 
     async def refresh(self) -> None:
         """Silently re-establish the portal session via the SSO cookie."""
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            present = sorted(
+                {(c["domain"] or "?", c.key) for c in self._session.cookie_jar}
+            )
+            _LOGGER.debug(
+                "Portal refresh: %d cookies present %s", len(present), present
+            )
         try:
             async with self._session.get(
                 AUTHPROXY_LOGIN, headers={"User-Agent": UA}, allow_redirects=True
@@ -205,6 +240,15 @@ class WebsitePortalClient:
             raise WebsitePortalError(f"refresh request failed: {err}") from err
         if "/u/login" in url or "/signin-service" in url:
             raise WebsitePortalAuthError("SSO session expired; full re-auth required")
+        # A failed silent auth (prompt=none) can still bounce back to the portal
+        # redirectUrl carrying ?error=login_required|consent_required, so the
+        # host check alone reads it as success. Treat any error param as an
+        # expired SSO instead of caching a dead session and reporting "ok".
+        sso_error = parse_qs(urlparse(url).query).get("error", [None])[0]
+        if sso_error:
+            raise WebsitePortalAuthError(
+                f"SSO silent refresh failed (error={sso_error}); re-auth required"
+            )
         if not (urlparse(url).hostname or "").endswith("volkswagen.de"):
             raise WebsitePortalAuthError(f"refresh did not land on portal: {url}")
 
