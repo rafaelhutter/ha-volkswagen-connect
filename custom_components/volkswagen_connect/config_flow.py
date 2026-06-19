@@ -70,6 +70,7 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
         self._portal: WebsitePortalClient | None = None
         self._portal_ready = False
         self._is_reauth = False
+        self._is_reconfigure = False
 
     async def _validate_eudataact(self, data: dict[str, Any]) -> None:
         session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
@@ -107,6 +108,10 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             data[CONF_WEBSITE_COOKIES] = self._portal.export_cookies()
         if self._is_reauth:
             return self.async_update_reload_and_abort(self._get_reauth_entry(), data=data)
+        if self._is_reconfigure:
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(), data=data
+            )
         return self.async_create_entry(title=self._collected[CONF_EMAIL], data=data)
 
     async def async_step_user(
@@ -124,6 +129,9 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             except EuDataActError as err:
                 _LOGGER.warning("EU Data Act could not connect during setup: %s", err)
                 errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 - never surface a bare "Unknown error"
+                _LOGGER.exception("Unexpected error during setup")
+                errors["base"] = "unknown"
             else:
                 self._collected = dict(user_input)
                 return await self._start_portal()
@@ -170,6 +178,9 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             except EuDataActError as err:
                 _LOGGER.warning("EU Data Act could not connect during reauth: %s", err)
                 errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 - never surface a bare "Unknown error"
+                _LOGGER.exception("Unexpected error during reauth")
+                errors["base"] = "unknown"
             else:
                 return await self._start_portal()
         return self.async_show_form(
@@ -177,4 +188,45 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
             description_placeholders={CONF_EMAIL: reauth_entry.data[CONF_EMAIL]},
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Full re-login from the integration's Reconfigure button.
+
+        Re-runs the whole login (credentials + portal email-OTP) and updates the
+        existing entry, so a lapsed volkswagen.de session can be restored without
+        deleting and re-adding the integration.
+        """
+        self._is_reconfigure = True
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+            self._abort_if_unique_id_mismatch(reason="account_mismatch")
+            try:
+                await self._validate_eudataact(user_input)
+            except EuDataActAuthError as err:
+                _LOGGER.warning("EU Data Act login rejected during reconfigure: %s", err)
+                errors["base"] = "invalid_auth"
+            except EuDataActError as err:
+                _LOGGER.warning("EU Data Act could not connect during reconfigure: %s", err)
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 - never surface a bare "Unknown error"
+                _LOGGER.exception("Unexpected error during reconfigure")
+                errors["base"] = "unknown"
+            else:
+                self._collected = dict(user_input)
+                return await self._start_portal()
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA,
+                {
+                    CONF_EMAIL: entry.data.get(CONF_EMAIL),
+                    CONF_BRAND: entry.data.get(CONF_BRAND, DEFAULT_BRAND),
+                },
+            ),
+            errors=errors,
         )
