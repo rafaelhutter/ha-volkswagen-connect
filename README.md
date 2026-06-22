@@ -70,7 +70,15 @@ One device per vehicle:
 - **Last lock command** / **Last lock command time** — most recent *confirmed*
   remote lock/unlock from the transaction log (command history, **not** a live
   lock sensor — see Limitations).
-- **Image** — the vehicle's exterior side-view photo.
+- **Lock** / **Open** — vehicle-level lock and opening status from the EU Data Act
+  feed, as binary sensors (Locked/Unlocked, Open/Closed). These are summary flags,
+  **not** per-door (VW delivers only the aggregate). Upgrading from a build with the
+  old `Locked`/`Open` *text* sensors replaces them with these binary sensors and
+  **purges the old sensors' recorder history** (so they don't linger as
+  `unavailable` for ~10 days). Their live values are unaffected.
+- **Images** — the vehicle's exterior photos. The side view is the default
+  **Image** entity; the other angles (front/rear, left/centre/right) are added
+  disabled-by-default, enable the ones you want per device.
 - **Data status** — `ok` / `no_data` / `not_configured`. Reflects the EU Data Act
   source (below): `not_configured` until you enable a continuous data request,
   `ok` once data is delivered. It does **not** affect the volkswagen.de data above.
@@ -86,11 +94,12 @@ One device per vehicle:
 
 - **Read-only.** No remote control (lock/climate/charge) — that needs the
   attestation-gated app API and is not possible.
-- **No live lock / window / door / climate / parking-position status.** These sit
-  behind VW's *secured-operations* tier that only the attestation-backed mobile
-  app can read (the endpoints return `401` even for a fully-activated primary
-  user). The *Last lock command* sensor surfaces the lock/unlock **history**
-  instead — treat it as "the last confirmed lock/unlock", not the current state.
+- **No live _per-door_ / per-window / climate / parking-position status.** The
+  volkswagen.de portal gates these behind VW's *secured-operations* tier that only
+  the attestation-backed mobile app can read (the endpoints return `401` even for a
+  fully-activated primary user). The EU Data Act feed does provide a vehicle-level
+  **Lock** / **Open** summary (the binary sensors above), but not per-door detail.
+  The *Last lock command* sensor surfaces the lock/unlock **history** from the portal.
 
 ## EU Data Act — rich vehicle telemetry
 
