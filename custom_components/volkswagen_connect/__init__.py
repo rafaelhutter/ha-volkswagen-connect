@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
+from .binary_sensor import BINARY_KEYS
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.IMAGE]
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.IMAGE]
+
+
+def _migrate_binary_keys(hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> None:
+    """Remove old text sensors for keys now served as binary sensors.
+
+    Their unique_id is ``{vin}_{key}`` (VIN is 17 chars); without this, upgrading
+    users would be left with orphaned 'unavailable' Locked/Open sensors.
+    """
+    reg = er.async_get(hass)
+    removed = []
+    for e in er.async_entries_for_config_entry(reg, entry.entry_id):
+        if e.domain == "sensor" and len(e.unique_id) > 18 and e.unique_id[18:] in BINARY_KEYS:
+            reg.async_remove(e.entity_id)
+            removed.append(e.entity_id)
+    if removed:
+        _LOGGER.info("Replaced legacy lock/open text sensors with binary sensors: %s", removed)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> bool:
@@ -18,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VolkswagenConnectConfigE
     await coordinator.async_refresh_session(force=True)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    _migrate_binary_keys(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

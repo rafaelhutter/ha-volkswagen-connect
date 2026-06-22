@@ -33,6 +33,7 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .binary_sensor import BINARY_KEYS
 from .const import DOMAIN
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
@@ -216,7 +217,7 @@ async def async_setup_entry(
                 new.append(VolkswagenConnectCapturedSensor(coordinator, vin))
             for key in vehicle.values:
                 vk = (vin, key)
-                if vk in known:
+                if vk in known or key in BINARY_KEYS:
                     continue
                 # Known keys (the curated portal set) are always allowed; only
                 # unrecognised keys count against the cap, so live telemetry can
