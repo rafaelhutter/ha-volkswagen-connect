@@ -85,6 +85,7 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
     # Friendly labels + units for the meaningful "continuous data" signals. The
     # long tail of raw fields keeps its dotted dataFieldName as its label.
     "mileage.value": {"name": "Mileage", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
+    "primary_range": {"name": "Primary range", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "icon": "mdi:map-marker-distance"},
     "battery_level_HV.value": {"name": "Battery level", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
     "battery_state_report.soc": {"name": "Battery state of charge", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
     "battery_state_report.charge_power": {"name": "Charge power (report)", "device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},

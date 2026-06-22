@@ -179,6 +179,16 @@ _SKIP_FIELDS = {
     "timestamp",
 }
 
+# Some documented signals ship with the generic placeholder dataFieldName
+# ``value`` (their real name lives only in VW's data dictionary, keyed by the
+# stable UUID). Resolve those by key so they aren't dropped as envelope noise.
+# Extend as more keys are confirmed from the data dictionary.
+_GENERIC_FIELD_NAMES = {"value", "state"}
+_KNOWN_DATA_KEYS = {
+    # Data Dictionary V4.0 (Continuous Data): "Value of the primary range" (km).
+    "0ca40e18-0564-3eda-bcc0-7aee9ef44f04": "primary_range",
+}
+
 
 def _coerce(value: Any) -> Any:
     """Turn obviously-numeric string values into int/float so they can graph.
@@ -214,6 +224,10 @@ def _extract_values(raw: dict[str, Any]) -> dict[str, Any]:
                 if not isinstance(r, dict):
                     continue
                 name = r.get("dataFieldName") or r.get("datafieldname")
+                # Recover a documented signal whose placeholder name would
+                # otherwise be skipped, by resolving its stable key UUID.
+                if name in _GENERIC_FIELD_NAMES:
+                    name = _KNOWN_DATA_KEYS.get(r.get("key"), name)
                 # Drop non-telemetry fields: ``*.value_type`` constant tags
                 # (VALUE_TYPE_PHYSICAL) and ``*_unit`` descriptors that just name
                 # another field's unit (e.g. charge_rate_unit) — neither is a
