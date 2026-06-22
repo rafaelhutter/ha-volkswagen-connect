@@ -1,8 +1,9 @@
-"""Image platform: the vehicle's exterior photo.
+"""Image platform: the vehicle's exterior photos.
 
-The authproxy resolves a VIN to a set of public VILMA CDN URLs; we expose the
-side view as a Home Assistant image entity (served by URL — the CDN assets need
-no authentication).
+The authproxy resolves a VIN to a set of public VILMA CDN URLs (side/front/back
+x left/center/right). The side-left view is the primary "Image" entity; the
+other views are added disabled-by-default so they don't clutter the UI. The CDN
+assets need no authentication, so entities are served by URL.
 """
 
 from __future__ import annotations
@@ -17,6 +18,10 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
+# The side-left view keeps the legacy "Image" entity (unique_id {vin}_image) for
+# backward compatibility; every other view is added as a separate entity.
+PRIMARY_VIEW = "side_left"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -24,16 +29,21 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    known: set[str] = set()
+    # Track (vin, view) pairs; view=None is the primary side-view "Image".
+    known: set[tuple[str, str | None]] = set()
 
     @callback
     def _add_new() -> None:
         new: list[ImageEntity] = []
         for vin, vehicle in (coordinator.data or {}).items():
-            if vin in known or not vehicle.image_url:
-                continue
-            known.add(vin)
-            new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin))
+            if vehicle.image_url and (vin, None) not in known:
+                known.add((vin, None))
+                new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin))
+            for view in vehicle.image_urls:
+                if view == PRIMARY_VIEW or (vin, view) in known:
+                    continue
+                known.add((vin, view))
+                new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin, view))
         if new:
             async_add_entities(new)
 
@@ -53,29 +63,46 @@ def _device(vehicle: VehicleData) -> DeviceInfo:
 
 
 class VolkswagenConnectVehicleImage(CoordinatorEntity[VolkswagenConnectCoordinator], ImageEntity):
-    """Exterior side-view photo of the vehicle."""
+    """An exterior photo of the vehicle: the primary side view, or a named view."""
 
     _attr_has_entity_name = True
-    _attr_name = "Image"
     _attr_content_type = "image/png"
 
     def __init__(
-        self, hass: HomeAssistant, coordinator: VolkswagenConnectCoordinator, vin: str
+        self,
+        hass: HomeAssistant,
+        coordinator: VolkswagenConnectCoordinator,
+        vin: str,
+        view: str | None = None,
     ) -> None:
         CoordinatorEntity.__init__(self, coordinator)
         ImageEntity.__init__(self, hass)
         self._vin = vin
-        self._attr_unique_id = f"{vin}_image"
+        self._view = view  # None = primary side-left view (legacy "Image" entity)
+        if view is None:
+            self._attr_unique_id = f"{vin}_image"
+            self._attr_name = "Image"
+        else:
+            self._attr_unique_id = f"{vin}_image_{view}"
+            self._attr_name = f"Image {view.replace('_', ' ')}"
+            self._attr_entity_registry_enabled_default = False
         self._current_url: str | None = None
-        v = self._vehicle
-        if v and v.image_url:
-            self._current_url = v.image_url
-            self._attr_image_url = v.image_url
+        url = self._url
+        if url:
+            self._current_url = url
+            self._attr_image_url = url
             self._attr_image_last_updated = dt_util.utcnow()
 
     @property
     def _vehicle(self) -> VehicleData | None:
         return (self.coordinator.data or {}).get(self._vin)
+
+    @property
+    def _url(self) -> str | None:
+        v = self._vehicle
+        if not v:
+            return None
+        return v.image_url if self._view is None else v.image_urls.get(self._view)
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -84,8 +111,7 @@ class VolkswagenConnectVehicleImage(CoordinatorEntity[VolkswagenConnectCoordinat
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        v = self._vehicle
-        url = v.image_url if v else None
+        url = self._url
         if url and url != self._current_url:
             self._current_url = url
             self._attr_image_url = url

@@ -61,6 +61,7 @@ class VehicleData:
     captured_at: str | None = None
     values: dict[str, Any] = field(default_factory=dict)
     image_url: str | None = None
+    image_urls: dict[str, str] = field(default_factory=dict)
     portal_ok: bool = False
 
 
@@ -248,8 +249,12 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 # Vehicle-health warning lights + last lock/unlock command.
                 data.values.update(await self.portal.get_warning_lights(vin))
                 data.values.update(await self.portal.get_lock_history(vin))
-                # Exterior image (public CDN URL, served by the image platform).
-                data.image_url = await self.portal.get_vehicle_image_url(vin)
+                # Exterior images (public CDN URLs, served by the image platform).
+                # All views in one call; the side-left stays the primary "Image".
+                data.image_urls = await self.portal.get_vehicle_images(vin)
+                data.image_url = data.image_urls.get("side_left") or next(
+                    iter(data.image_urls.values()), None
+                )
                 info = await self.portal.get_vehicle_info(vin)
                 for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
                     if info.get(k) and not data.info.get(k):

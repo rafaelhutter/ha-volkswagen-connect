@@ -67,6 +67,21 @@ class _MfaRequired(Exception):
         self.html = html
 
 
+def _image_views(urls: Any) -> dict[str, str]:
+    """Map VILMA image URLs to {view_key: url} by their path segment.
+
+    e.g. ``.../2025/Side_Left/<hash>.png`` -> ``{"side_left": url}``.
+    """
+    out: dict[str, str] = {}
+    for u in urls if isinstance(urls, list) else []:
+        if not isinstance(u, str):
+            continue
+        m = re.search(r"/([A-Za-z]+_[A-Za-z]+)/[^/]+\.\w+$", u)
+        if m:
+            out[m.group(1).lower()] = u
+    return out
+
+
 def _parse_form(html: str) -> tuple[dict[str, str], str | None]:
     soup = BeautifulSoup(html, "html.parser")
     form = soup.find("form")
@@ -427,23 +442,25 @@ class WebsitePortalClient:
             out["last_lock_action_time"] = chosen["timestamp"]
         return out
 
-    async def get_vehicle_image_url(self, vin: str) -> str | None:
-        """Public CDN URL of the vehicle's exterior side view (or None)."""
+    async def get_vehicle_images(self, vin: str) -> dict[str, str]:
+        """All exterior view URLs from VILMA, keyed by view (e.g. 'side_left').
+
+        A single call returns the whole set (side/front/back x left/center/right);
+        the viewDirection/angle params only reorder it. Public CDN, no auth.
+        """
         status, body = await self._get(
             f"/app/authproxy/vw-de/proxy/vehicleimages/exterior/{vin}"
             "?viewDirection=side&angle=left&resourceHost=myvw-vilma-proxy-prod",
             accept="*/*",
         )
         if status != 200:
-            _LOGGER.debug("portal vehicleimage %s -> %s", vin, status)
-            return None
+            _LOGGER.debug("portal vehicleimages %s -> %s", vin, status)
+            return {}
         try:
             urls = json.loads(body).get("imageUrls")
         except ValueError:
-            return None
-        if isinstance(urls, list) and urls and isinstance(urls[0], str):
-            return urls[0]
-        return None
+            return {}
+        return _image_views(urls)
 
     async def get_vehicle_info(self, vin: str) -> dict[str, Any]:
         """Static vehicle info: modelName, exteriorColor, engine, nickname, licensePlate."""
