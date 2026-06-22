@@ -267,7 +267,17 @@ class EuDataActClient:
         return f"{OIDC_AUTHORIZE_URL}?{urlencode(params)}"
 
     async def login(self) -> None:
-        """Run the signin-service OIDC code flow; establishes the portal session."""
+        """Run the signin-service OIDC code flow; establishes the portal session.
+
+        Transport failures (DNS/connection/timeout) are re-raised as
+        EuDataActError so callers report "cannot connect" instead of "unknown".
+        """
+        try:
+            await self._login_flow()
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise EuDataActError(f"could not reach VW Identity: {err}") from err
+
+    async def _login_flow(self) -> None:
         hdrs = {"User-Agent": USER_AGENT}
         # 0. prime portal (sets AEM cookies the callback needs)
         try:
@@ -323,9 +333,12 @@ class EuDataActClient:
         await self._ensure_login()
         full = url if url.startswith("http") else BASE_URL + url
         h = {"User-Agent": USER_AGENT, **(headers or {})}
-        async with self._session.request(method, full, headers=h) as resp:
-            status = resp.status
-            body = await resp.read()
+        try:
+            async with self._session.request(method, full, headers=h) as resp:
+                status = resp.status
+                body = await resp.read()
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise EuDataActError(f"{method} {full} failed: {err}") from err
         # Auth failure OR Adobe-AEM session-expiry (5xx + HTML body) -> re-login once.
         looks_aem = status >= 500 and body[:1] == b"<"
         if (status in (401, 403) or looks_aem) and not _retried:
