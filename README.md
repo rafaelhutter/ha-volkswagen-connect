@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/icon.png" alt="Volkswagen Connect" width="128" height="128">
+</p>
+
 # Volkswagen Connect — Home Assistant integration
 
 A **read-only** Home Assistant integration that pulls your Volkswagen vehicle
