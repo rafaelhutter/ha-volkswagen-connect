@@ -48,6 +48,19 @@ _LOGGER = logging.getLogger(__name__)
 _MIN_REFRESH_INTERVAL_S = 600
 
 
+def _choose_primary_view(views: dict[str, str]) -> str | None:
+    """Pick the hero view for the main Image entity: a side/profile shot.
+
+    Not every model exposes 'side_left' (the ID.3 keys its profile differently),
+    so fall back through side_right, any side view, then the first available.
+    """
+    for key in ("side_left", "side_right"):
+        if key in views:
+            return key
+    side = next((k for k in views if k.startswith("side")), None)
+    return side or next(iter(views), None)
+
+
 @dataclass
 class VehicleData:
     """Per-vehicle snapshot exposed to entities."""
@@ -62,6 +75,7 @@ class VehicleData:
     values: dict[str, Any] = field(default_factory=dict)
     image_url: str | None = None
     image_urls: dict[str, str] = field(default_factory=dict)
+    primary_image_view: str | None = None
     portal_ok: bool = False
 
 
@@ -250,11 +264,10 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 data.values.update(await self.portal.get_warning_lights(vin))
                 data.values.update(await self.portal.get_lock_history(vin))
                 # Exterior images (public CDN URLs, served by the image platform).
-                # All views in one call; the side-left stays the primary "Image".
+                # All views in one call; a side/profile shot is the primary "Image".
                 data.image_urls = await self.portal.get_vehicle_images(vin)
-                data.image_url = data.image_urls.get("side_left") or next(
-                    iter(data.image_urls.values()), None
-                )
+                data.primary_image_view = _choose_primary_view(data.image_urls)
+                data.image_url = data.image_urls.get(data.primary_image_view or "")
                 info = await self.portal.get_vehicle_info(vin)
                 for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
                     if info.get(k) and not data.info.get(k):

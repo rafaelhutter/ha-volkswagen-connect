@@ -80,8 +80,9 @@ One device per vehicle:
   old `Locked`/`Open` *text* sensors replaces them with these binary sensors and
   **purges the old sensors' recorder history** (so they don't linger as
   `unavailable` for ~10 days). Their live values are unaffected.
-- **Images** — the vehicle's exterior photos. The side view is the default
-  **Image** entity; the other angles (front/rear, left/centre/right) are added
+- **Images** — the vehicle's exterior photos. A side profile shot is the default
+  **Image** entity (picked per vehicle, since models key their views
+  differently); the other angles (front/rear, left/centre/right) are added
   disabled-by-default, enable the ones you want per device.
 - **Data status** — `ok` / `no_data` / `not_configured`. Reflects the EU Data Act
   source (below): `not_configured` until you enable a continuous data request,

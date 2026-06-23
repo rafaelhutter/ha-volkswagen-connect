@@ -1,9 +1,10 @@
 """Image platform: the vehicle's exterior photos.
 
 The authproxy resolves a VIN to a set of public VILMA CDN URLs (side/front/back
-x left/center/right). The side-left view is the primary "Image" entity; the
-other views are added disabled-by-default so they don't clutter the UI. The CDN
-assets need no authentication, so entities are served by URL.
+x left/center/right). A side/profile view (chosen per vehicle) is the primary
+"Image" entity; the other views are added disabled-by-default so they don't
+clutter the UI. The CDN assets need no authentication, so entities are served by
+URL.
 """
 
 from __future__ import annotations
@@ -17,10 +18,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
-
-# The side-left view keeps the legacy "Image" entity (unique_id {vin}_image) for
-# backward compatibility; every other view is added as a separate entity.
-PRIMARY_VIEW = "side_left"
 
 
 async def async_setup_entry(
@@ -40,7 +37,7 @@ async def async_setup_entry(
                 known.add((vin, None))
                 new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin))
             for view in vehicle.image_urls:
-                if view == PRIMARY_VIEW or (vin, view) in known:
+                if view == vehicle.primary_image_view or (vin, view) in known:
                     continue
                 known.add((vin, view))
                 new.append(VolkswagenConnectVehicleImage(hass, coordinator, vin, view))
