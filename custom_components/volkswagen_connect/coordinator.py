@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +44,7 @@ from .eu_data_act import (
 from .website_portal import (
     WebsitePortalAuthError,
     WebsitePortalClient,
+    WebsitePortalError,
     WebsitePortalVehicleError,
 )
 
@@ -81,6 +83,7 @@ class VehicleData:
     image_url: str | None = None
     image_urls: dict[str, str] = field(default_factory=dict)
     primary_image_view: str | None = None
+    # True once the portal served this vehicle signals (gates the duplicate purge).
     portal_ok: bool = False
 
 
@@ -302,7 +305,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             for vin, data in result.items():
                 try:
                     await self._merge_one(vin, data)
-                except WebsitePortalVehicleError as err:
+                except WebsitePortalError as err:
                     # e.g. a lapsed We Connect licence (403/4007): this vehicle
                     # has no portal data, every other one on the account still
                     # does (#25).
@@ -327,36 +330,49 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 f"Volkswagen session expired ({auth_failed}); please log in again"
             ) from auth_failed
 
+    async def _portal_fetch(
+        self, what: str, vin: str, fetch: Callable[[str], Awaitable[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        """Fetch one portal endpoint, tolerating VW refusing just that one.
+
+        A 403/412 on a fresh session is VW withholding a single resource; it
+        must not cost this vehicle every other signal.
+        """
+        try:
+            return await fetch(vin)
+        except WebsitePortalVehicleError as err:
+            _LOGGER.debug("Portal serves no %s for %s: %s", what, vin, err)
+            return {}
+
     async def _merge_one(self, vin: str, data: VehicleData) -> None:
-        """Enrich one vehicle with portal data."""
+        """Enrich one vehicle with portal data, endpoint by endpoint.
+
+        Each call is independent: a combustion car 412s on charging, a VWCV van
+        can be refused maintenance, and neither may blank the rest (#30).
+        """
         assert self.portal is not None
-        maint = await self.portal.get_maintenance(vin)
+        maint = await self._portal_fetch("maintenance", vin, self.portal.get_maintenance)
         portal_values: dict[str, Any] = {
             clean: maint[raw]
             for raw, clean in _MAINTENANCE_MAP.items()
             if maint.get(raw) is not None
         }
-        # Live battery/charging telemetry (already clean keys). Not every
-        # vehicle has a battery - a combustion car 412s here even with a
-        # perfectly valid session, so skip only this call rather than the
-        # vehicle's remaining (odometer, service, lock) data.
-        try:
-            portal_values.update(await self.portal.get_charging(vin))
-        except WebsitePortalVehicleError as err:
-            _LOGGER.debug("No charging data for %s (likely not an EV): %s", vin, err)
+        for what, fetch in (
+            ("charging", self.portal.get_charging),
+            ("warning lights", self.portal.get_warning_lights),
+            ("lock history", self.portal.get_lock_history),
+        ):
+            portal_values.update(await self._portal_fetch(what, vin, fetch))
         data.values.update(portal_values)
-        # Vehicle-health warning lights + last lock/unlock command.
-        data.values.update(await self.portal.get_warning_lights(vin))
-        data.values.update(await self.portal.get_lock_history(vin))
         # Exterior images (public CDN URLs, served by the image platform).
         # All views in one call; a side/profile shot is the primary "Image".
-        data.image_urls = await self.portal.get_vehicle_images(vin)
+        data.image_urls = await self._portal_fetch("images", vin, self.portal.get_vehicle_images)
         data.primary_image_view = _choose_primary_view(data.image_urls)
         data.image_url = data.image_urls.get(data.primary_image_view or "")
-        info = await self.portal.get_vehicle_info(vin)
+        info = await self._portal_fetch("vehicle info", vin, self.portal.get_vehicle_info)
         for k in ("nickName", "nickname", "licensePlate", "modelName", "engine", "exteriorColor"):
             if info.get(k) and not data.info.get(k):
                 data.info[k] = info[k]
         self.portal_keys[vin].update(portal_values)
         _drop_duplicates(data.values, self.portal_keys[vin])
-        data.portal_ok = True
+        data.portal_ok = bool(portal_values)
