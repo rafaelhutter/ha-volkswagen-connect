@@ -201,17 +201,18 @@ _KNOWN_DATA_KEYS = {
 }
 
 
-# 32-bit "unset" sentinel VW sends for a field it has no real reading for
-# (e.g. mileage on a car that hasn't reported it yet). Not a real distance -
-# dropping it to None avoids showing a nonsense multi-billion-km odometer.
-_UINT32_SENTINEL = 2**32 - 1
+# VW's "no real reading yet" markers: signed/unsigned 32-bit min & max, all
+# ~2.1bn in magnitude — impossible as real telemetry (km, %, s), so drop them.
+_UNSET_SENTINELS = frozenset({2**32 - 1, 2**31 - 1, -(2**31)})
+# ponytail: 0xFFFF is also a VW unset marker but a plausible real reading
+# (e.g. metres of range), so it's excluded to avoid dropping live values.
 
 
 def _coerce(value: Any) -> Any:
     """Turn obviously-numeric string values into int/float so they can graph.
 
     Also unwraps the ``<n>s`` second-duration form VW uses (e.g. ``6900s``)
-    and drops the 32-bit "unset" sentinel value (see ``_UINT32_SENTINEL``).
+    and drops the "unset" sentinel values (see ``_UNSET_SENTINELS``).
     """
     if isinstance(value, str):
         v = value.strip()
@@ -221,7 +222,7 @@ def _coerce(value: Any) -> Any:
             value = float(v)
         elif re.fullmatch(r"\d+s", v):  # "6900s" -> 6900 (seconds)
             value = int(v[:-1])
-    if isinstance(value, int) and not isinstance(value, bool) and value == _UINT32_SENTINEL:
+    if isinstance(value, int) and not isinstance(value, bool) and value in _UNSET_SENTINELS:
         return None
     return value
 

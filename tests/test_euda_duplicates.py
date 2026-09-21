@@ -65,6 +65,19 @@ def test_duplicate_across_two_files_in_one_delivery() -> None:
     assert eu._extract_values(raw)[0] == {"range": 250}
 
 
+def test_coerce_drops_unset_sentinels() -> None:
+    """VW's signed/unsigned 32-bit unset markers must not surface as values."""
+    for marker in (2**32 - 1, 2**31 - 1, -(2**31)):
+        assert eu._coerce(marker) is None, marker
+        assert eu._coerce(str(marker)) is None, marker  # arrives as a string too
+
+
+def test_coerce_keeps_real_readings_near_sentinels() -> None:
+    """0xFFFF and ordinary values are real; only the ~2.1bn markers drop."""
+    for keep in (0, 65535, 42000, -1, 2**31 - 2):
+        assert eu._coerce(keep) == keep, keep
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):
