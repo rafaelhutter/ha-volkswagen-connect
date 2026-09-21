@@ -459,19 +459,39 @@ class WebsitePortalClient:
                 "?resourceHost=myvw-vum-prod"
             )
             if status == 200:
-                mod_backend = (
-                    json.loads(body).get("relation", {}).get("vehicle", {}).get("modBackend")
-                    or ""
-                )
+                relation = json.loads(body).get("relation", {})
+                mod_backend = relation.get("vehicle", {}).get("modBackend") or ""
                 prefix = mod_backend.split("_", 1)[0]
                 if prefix:
                     gdc = prefix.lower()
+                self._log_relation(vin, relation)
+            else:
+                # A non-200 here is the usual reason a car has no portal sensors
+                # at all: the VIN isn't linked to this account (#30).
+                _LOGGER.debug(
+                    "Relation lookup for %s -> %s; vehicle may not be linked to this account",
+                    vin, status,
+                )
         except (ValueError, AttributeError, WebsitePortalError) as err:
             _LOGGER.debug("Could not resolve gdc for %s, defaulting to %r: %s", vin, gdc, err)
         # Names the cluster a 412 would be coming from — first thing to ask for.
         _LOGGER.debug("Resolved gdc for %s: %s", vin, gdc)
         self._gdc_cache[vin] = gdc
         return gdc
+
+    @staticmethod
+    def _log_relation(vin: str, relation: dict[str, Any]) -> None:
+        """Log the relation's role/enrolment — why a car with a valid session
+        can still serve no data (a guest/non-primary relation, #30).
+        """
+        _LOGGER.debug(
+            "Relation for %s: role=%s enrollment=%s primary=%s keys=%s",
+            vin,
+            relation.get("role"),
+            relation.get("enrollmentStatus"),
+            relation.get("primaryUser") or relation.get("primaryCar"),
+            sorted(relation),
+        )
 
     async def get_maintenance(self, vin: str) -> dict[str, Any]:
         """Returns mileage_km, inspectionDue_days/km, oilServiceDue_*, carCapturedTimestamp."""
