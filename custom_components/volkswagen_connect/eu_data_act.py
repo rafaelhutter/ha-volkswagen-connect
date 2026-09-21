@@ -226,6 +226,19 @@ def _coerce(value: Any) -> Any:
     return value
 
 
+def _beats(new: tuple[str, str], old: tuple[str, str]) -> bool:
+    """Does (key, timestamp) ``new`` win the sensor over the record ``old``?
+
+    VW repeats a dataFieldName under several keys with conflicting values, so
+    the sensor flipped on whichever record landed last (#29). Lowest key wins,
+    which is arbitrary but stable across deliveries; within one key the newest
+    sample wins, and an exact tie keeps the later record as before.
+    """
+    new_key, new_ts = new
+    old_key, old_ts = old
+    return new_key < old_key or (new_key == old_key and new_ts >= old_ts)
+
+
 def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     """Turn an EU Data Act dataset into ``{dataFieldName: latest value}``, plus
     the newest ``timestampUtc`` seen across all records.
@@ -233,9 +246,9 @@ def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     The payload's ``Data`` array is a flat list of ``{key, dataFieldName, value,
     timestampUtc}`` records — typically several timestamped samples of the same
     field. We key by ``dataFieldName`` (which is stable across the 15-min
-    deliveries) and keep the last value seen, so each signal maps to exactly
-    one sensor that tracks its most recent reading. Inner docs that don't use
-    this shape fall back to a generic flatten (no per-record timestamp then).
+    deliveries) and pick one record per name with ``_beats``, so each signal
+    maps to exactly one sensor. Inner docs that don't use this shape fall back
+    to a generic flatten (no per-record timestamp then).
 
     ``timestampUtc`` is the moment the car reported that record - on flat
     (pre-ID.x) payloads it's the only capture-time signal available (there is
@@ -244,6 +257,8 @@ def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     capture time.
     """
     out: dict[str, Any] = {}
+    # dataFieldName -> (key, timestampUtc) of the record currently holding it.
+    picks: dict[str, tuple[str, str]] = {}
     latest_ts: str | None = None
     for doc in raw.values():
         records = (doc.get("Data") or doc.get("data")) if isinstance(doc, dict) else None
@@ -265,6 +280,11 @@ def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
                 # useful sensor.
                 if not name or name in _SKIP_FIELDS or name.endswith((".value_type", "_unit")):
                     continue
+                candidate = (str(r.get("key") or ""), ts if isinstance(ts, str) else "")
+                held = picks.get(name)
+                if held is not None and not _beats(candidate, held):
+                    continue
+                picks[name] = candidate
                 out[name] = _coerce(r.get("value"))
         elif isinstance(doc, (dict, list)):
             out.update(flatten(doc))
