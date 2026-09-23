@@ -53,7 +53,7 @@ def test_mbb_car_resolves_to_mbb_and_logs_role() -> None:
     body = '{"relation": {"role": "PRIMARY_USER", "enrollmentStatus": "COMPLETED", "vehicle": {"modBackend": "MBB_ODP"}}}'
     gdc, lines = _resolve(200, body)
     assert gdc == "mbb", gdc
-    assert any("role=PRIMARY_USER" in ln and "enrolment=COMPLETED" in ln for ln in lines), lines
+    assert any("role=PRIMARY_USER" in ln and "enrollment=COMPLETED" in ln for ln in lines), lines
 
 
 def test_id_car_defaults_to_wcar() -> None:
