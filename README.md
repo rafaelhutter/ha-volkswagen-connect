@@ -58,7 +58,8 @@ logs back in for you with the credentials you already gave it — VW remembers
 the browser, so no new OTP is needed and you won't notice. Only if VW does ask
 for a fresh code does Home Assistant show a **Reauthentication required**
 prompt: re-enter your password plus the email OTP there and the data resumes.
-No need to remove and re-add anything.
+No need to remove and re-add anything. The background attempt that noticed it
+may already have sent you one code; ignore that one and use the newest email.
 
 VW sometimes interrupts an otherwise-valid session with a **consent/permissions
 screen**; the integration detects this and tells you. Accept it once on
