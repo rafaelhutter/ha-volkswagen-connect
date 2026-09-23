@@ -73,6 +73,8 @@ _CONSENT_HINT = (
     "Volkswagen Connect integration (a reinstall won't help)."
 )
 
+_OTP_HINT = "Volkswagen wants a new email code; please reconfigure the integration"
+
 
 def _is_consent_url(url: str) -> bool:
     low = url.lower()
@@ -98,6 +100,10 @@ class WebsitePortalVehicleError(WebsitePortalError):
 
 class WebsitePortalConsentRequired(WebsitePortalAuthError):
     """VW's consent wall — credentials cannot clear it, only the user can."""
+
+
+class WebsitePortalOtpRequired(WebsitePortalAuthError):
+    """VW's MFA challenge — each visit to it mails the user a fresh code."""
 
 
 class _MfaRequired(Exception):
@@ -139,6 +145,8 @@ def _validate_landing(url: str) -> None:
     """Raise unless an authorize chain terminated on a live portal session."""
     if _is_consent_url(url):
         raise WebsitePortalConsentRequired(_CONSENT_HINT)
+    if "/u/mfa" in url:
+        raise WebsitePortalOtpRequired(_OTP_HINT)
     if "/u/login" in url or "/signin-service" in url:
         raise WebsitePortalAuthError("SSO session expired; full re-auth required")
     # A failed silent auth (prompt=none) can still bounce back to the portal
@@ -163,6 +171,7 @@ class WebsitePortalClient:
         self._mfa: dict[str, Any] | None = None
         self._gdc_cache: dict[str, str] = {}
         self._last_relogin: float | None = None
+        self._otp_required = False
 
     # -- cookie persistence -------------------------------------------------
 
@@ -307,11 +316,21 @@ class WebsitePortalClient:
         browser" cookie lets a plain email+password login back in without a new
         OTP, so heal in place instead.
         """
+        # Once VW wants a code, every further attempt mails another one (#31).
+        if self._otp_required:
+            raise WebsitePortalOtpRequired(_OTP_HINT)
+        try:
+            await self._refresh_or_relogin()
+        except WebsitePortalOtpRequired:
+            self._otp_required = True
+            raise
+
+    async def _refresh_or_relogin(self) -> None:
         try:
             await self._silent_refresh()
             return
-        except WebsitePortalConsentRequired:
-            raise  # only the user can clear this; credentials won't
+        except (WebsitePortalConsentRequired, WebsitePortalOtpRequired):
+            raise  # only the user can clear these; credentials won't
         except WebsitePortalAuthError as err:
             now = time.monotonic()
             if (
@@ -323,9 +342,7 @@ class WebsitePortalClient:
             _LOGGER.info("Portal SSO gone (%s); re-logging in with stored credentials", err)
             if await self.begin_login() != "ok":
                 self._mfa = None
-                raise WebsitePortalAuthError(
-                    "re-login needs a fresh email OTP; please reconfigure"
-                ) from err
+                raise WebsitePortalOtpRequired(_OTP_HINT) from err
             _LOGGER.info("Portal session re-established without an OTP")
 
     async def _silent_refresh(self) -> None:

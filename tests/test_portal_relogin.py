@@ -16,6 +16,7 @@ WebsitePortalVehicleError = wp.WebsitePortalVehicleError
 WebsitePortalAuthError = wp.WebsitePortalAuthError
 WebsitePortalClient = wp.WebsitePortalClient
 WebsitePortalConsentRequired = wp.WebsitePortalConsentRequired
+WebsitePortalOtpRequired = wp.WebsitePortalOtpRequired
 _CONSENT_HINT = wp._CONSENT_HINT
 _validate_landing = wp._validate_landing
 
@@ -51,9 +52,10 @@ class _FakeSession:
 
 def client(silent_error, login_result):
     c = WebsitePortalClient(None, "a@b.c", "pw")
-    calls = {"login": 0}
+    calls = {"login": 0, "silent": 0}
 
     async def silent():
+        calls["silent"] += 1
         if silent_error:
             raise silent_error
 
@@ -74,6 +76,7 @@ async def main():
     for url, exc in (
         ("https://identity.vwgroup.io/v2/login/ui/consent", WebsitePortalConsentRequired),
         ("https://identity.vwgroup.io/u/login?state=x", WebsitePortalAuthError),
+        ("https://identity.vwgroup.io/u/mfa-email-challenge?state=x", WebsitePortalOtpRequired),
         (PORTAL_OK + "?error=login_required", WebsitePortalAuthError),
         ("https://example.com/", WebsitePortalAuthError),
     ):
@@ -93,14 +96,26 @@ async def main():
     await c.refresh()
     assert calls["login"] == 1
 
-    # dead SSO + OTP demanded -> surface reauth
-    c, calls = client(WebsitePortalAuthError("SSO session expired"), "otp_required")
-    try:
-        await c.refresh()
-        raise AssertionError("expected reauth")
-    except WebsitePortalAuthError as err:
-        assert "OTP" in str(err), err
-    assert calls["login"] == 1
+    # OTP demanded (by the re-login or straight from the silent refresh) ->
+    # surface reauth once, then never touch VW again: each visit mails a code (#31)
+    for silent_error, login_result in (
+        (WebsitePortalAuthError("SSO session expired"), "otp_required"),
+        (WebsitePortalOtpRequired("mfa"), "ok"),
+    ):
+        c, calls = client(silent_error, login_result)
+        for _ in range(3):
+            try:
+                await c.refresh()
+                raise AssertionError("expected reauth")
+            except WebsitePortalOtpRequired:
+                pass
+        with patch.object(wp.time, "monotonic", return_value=1e12):
+            try:
+                await c.refresh()
+                raise AssertionError("expected reauth after cooldown")
+            except WebsitePortalOtpRequired:
+                pass
+        assert calls == {"login": int(login_result != "ok"), "silent": 1}, calls
 
     # consent wall -> never spend a login on it
     c, calls = client(WebsitePortalConsentRequired(_CONSENT_HINT), "ok")
