@@ -305,6 +305,8 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             for vin, data in result.items():
                 try:
                     await self._merge_one(vin, data)
+                except WebsitePortalAuthError:
+                    raise  # a dead session is the account's, and must reach reauth (#31)
                 except WebsitePortalError as err:
                     # e.g. a lapsed We Connect licence (403/4007): this vehicle
                     # has no portal data, every other one on the account still

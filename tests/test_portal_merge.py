@@ -14,8 +14,10 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from custom_components.volkswagen_connect import coordinator as co  # noqa: E402
 from custom_components.volkswagen_connect.website_portal import (  # noqa: E402
+    WebsitePortalAuthError,
     WebsitePortalVehicleError,
 )
+from homeassistant.exceptions import ConfigEntryAuthFailed  # noqa: E402
 
 VIN = "WVWZZZ00000000001"
 
@@ -59,6 +61,18 @@ class FakeCoordinator:
 
     _portal_fetch = co.VolkswagenConnectCoordinator._portal_fetch
     _merge_one = co.VolkswagenConnectCoordinator._merge_one
+    _merge_portal = co.VolkswagenConnectCoordinator._merge_portal
+
+    async def async_refresh_session(self) -> None:
+        pass
+
+    def _persist_portal_cookies(self) -> None:
+        pass
+
+
+class DeadSessionPortal(FakePortal):
+    async def get_maintenance(self, vin: str) -> dict:
+        raise WebsitePortalAuthError("portal session rejected (HTTP 401)")
 
 
 def _merge(*refused: str) -> co.VehicleData:
@@ -96,6 +110,16 @@ def test_portal_serving_nothing_is_not_reported_ok() -> None:
     data = _merge("maintenance", "charging", "warning_lights", "lock_history", "images", "info")
     assert data.values == {}, data.values
     assert not data.portal_ok
+
+
+def test_dead_session_reaches_reauth() -> None:
+    """Swallowing it per vehicle kept polling alive, mailing an OTP each cycle (#31)."""
+    result = {VIN: co.VehicleData(vin=VIN, info={"vin": VIN})}
+    try:
+        asyncio.run(FakeCoordinator(DeadSessionPortal())._merge_portal(result))
+    except ConfigEntryAuthFailed:
+        return
+    raise AssertionError("dead portal session was swallowed")
 
 
 if __name__ == "__main__":
