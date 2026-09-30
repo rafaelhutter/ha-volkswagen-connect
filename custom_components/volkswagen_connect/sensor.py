@@ -28,6 +28,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -265,12 +266,21 @@ def _prettify(key: str) -> str:
     return label[:1].upper() + label[1:] if label else key
 
 
+def _enable_if_curated(registry: er.EntityRegistry, vin: str, key: str) -> None:
+    """Switch a field created off while uncurated back on once curated; a user's own choice stays."""
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{vin}_{key}")
+    entry = registry.async_get(entity_id) if entity_id else None
+    if key in KNOWN_KEYS and entry and entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+        registry.async_update_entity(entity_id, disabled_by=None)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VolkswagenConnectConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
+    registry = er.async_get(hass)
     known: set[tuple[str, str]] = set()
 
     # Per-vehicle count of value sensors already created, to enforce the cap.
@@ -305,6 +315,7 @@ async def async_setup_entry(
                 known.add(vk)
                 if key not in KNOWN_KEYS:
                     value_count[vin] = value_count.get(vin, 0) + 1
+                _enable_if_curated(registry, vin, key)
                 new.append(VolkswagenConnectValueSensor(coordinator, vin, key))
         if new:
             async_add_entities(new)
