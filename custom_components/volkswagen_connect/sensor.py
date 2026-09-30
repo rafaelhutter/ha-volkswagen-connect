@@ -96,6 +96,8 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
     "cruising_range_primary_engine": {"name": "Range (primary)", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
     "cruising_range_secondary_engine": {"name": "Range (secondary)", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:ev-station"},
     "fuel_level_current_level": {"name": "Fuel level", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
+    # The flat-payload EVs (e-up!, e-Golf) report their HV battery here (#33).
+    "state_of_charge": {"name": "Battery state of charge", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
     # Trip-computer averages, reported in tenths (#12).
     "long_term_data_average_fuel_consumption": {"name": "Average consumption (long term)", "unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},
     "short_term_data_average_fuel_consumption": {"name": "Average consumption (short term)", "unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},

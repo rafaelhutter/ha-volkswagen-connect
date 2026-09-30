@@ -107,7 +107,7 @@ _PORTAL_DUPLICATES = {
     # Both the dotted (ID.x) and flat (pre-ID.x) EU Data Act mileage keys
     # duplicate the portal's "odometer" - this Tiguan sends the flat one.
     "odometer": ("mileage.value", "mileage"),
-    "soc": ("battery_level_HV.value", "battery_state_report.soc"),
+    "soc": ("battery_level_HV.value", "battery_state_report.soc", "state_of_charge"),
     "charge_power": ("battery_state_report.charge_power",),
     "charge_rate": ("battery_state_report.charge_rate",),
     "charging_state": ("charging_state_report.current_charge_state",),

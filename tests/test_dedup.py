@@ -41,6 +41,13 @@ def test_thin_payload_does_not_resurrect_duplicate() -> None:
     assert thin == {}, f"duplicate came back and would spawn a dead entity: {thin}"
 
 
+def test_flat_state_of_charge_yields_to_portal_battery() -> None:
+    """The e-up!'s flat SoC field is the same signal as the portal's battery (#33)."""
+    values = {"soc": 70, "state_of_charge": 70}
+    co._drop_duplicates(values, {"soc"})
+    assert values == {"soc": 70}, values
+
+
 def test_every_table_entry_is_reachable() -> None:
     """Guards against a portal key in the table that no source can ever set."""
     known = set(co._MAINTENANCE_MAP.values())
