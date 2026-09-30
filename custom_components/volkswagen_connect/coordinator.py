@@ -147,6 +147,21 @@ def _drop_duplicates(values: dict[str, Any], owned: set[str]) -> None:
                 values.pop(field_name, None)
 
 
+# VW's fuel fields on a flat-payload battery EV (e-up!, e-Golf): empty, or stuck at 100 % (#33).
+_FUEL_FIELDS = ("fuel_level_current_level", "fuel_level__accuracy")
+
+
+def _drop_fuel_of_battery_only(values: dict[str, Any], traits: set[str]) -> None:
+    """Strip the fuel fields of a car that has ever shown a battery and never a second engine (#33)."""
+    if "state_of_charge" in values:
+        traits.add("battery")
+    if values.get("cruising_range_secondary_engine") is not None:
+        traits.add("second_engine")  # a plug-in hybrid's electric range
+    if traits == {"battery"}:
+        for field in _FUEL_FIELDS:
+            values.pop(field, None)
+
+
 def _best_captured_at(values: dict[str, Any]) -> str | None:
     """Most recent 'captured by the car' timestamp in an EU Data Act dataset.
 
@@ -172,6 +187,8 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         self._last_refresh: float | None = None
         # VIN -> portal signals that car has ever served (see _drop_duplicates).
         self.portal_keys: dict[str, set[str]] = defaultdict(set)
+        # VIN -> drivetrain traits its deliveries have shown (see _drop_fuel_of_battery_only).
+        self.drivetrain: dict[str, set[str]] = defaultdict(set)
         self.client = EuDataActClient(
             async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
             email=entry.data[CONF_EMAIL],
@@ -226,6 +243,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                     data.dataset = latest["dataset"]
                     data.created_on = latest["created_on"]
                     data.values = dict(latest["values"])
+                    _drop_fuel_of_battery_only(data.values, self.drivetrain[vin])
                     # Flat (pre-ID.x) payloads carry no dedicated capture-time
                     # field; latest["captured_at"] (the per-record timestampUtc)
                     # covers those. Dotted payloads without it fall back to
