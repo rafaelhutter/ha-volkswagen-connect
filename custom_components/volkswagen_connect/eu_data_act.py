@@ -30,7 +30,7 @@ import logging
 import re
 import zipfile
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -61,6 +61,9 @@ METADATA_PATH = "/proxy_api/euda-apim/datarequest/vehicles/{vin}/metadata/partia
 LIST_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/list"
 DOWNLOAD_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/download"
 NO_CONTENT_SUFFIX = "_no_content_found.zip"
+# VW injects this optional page after a good login every few weeks (MEB cars, evcc#29760);
+# its pre-signed callback finishes the login without opting in (#34).
+MARKETING_CONSENT_PATH = "/consent/marketing/"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -145,6 +148,16 @@ def _login_error(html: str) -> str | None:
     if isinstance(err, dict):
         return err.get("text") or err.get("errorCode") or json.dumps(err)
     return str(err)
+
+
+def _marketing_consent_callback(url: str) -> str | None:
+    """The URL that continues past VW's marketing-consent page, or None if ``url`` isn't one."""
+    parsed = urlparse(url)
+    callback = parse_qs(parsed.query).get("callback", [""])[0]
+    if MARKETING_CONSENT_PATH not in parsed.path or not callback:
+        return None
+    target = urlparse(callback)
+    return target._replace(query=urlencode(parse_qsl(target.query))).geturl()  # scopes carry raw spaces
 
 
 def flatten(data: Any, prefix: str = "") -> dict[str, Any]:
@@ -389,6 +402,7 @@ class EuDataActClient:
         ) as resp:
             landing = await resp.text()
             landing_url = str(resp.url)
+        landing, landing_url = await self._skip_marketing_consent(landing, landing_url, hdrs)
 
         if "signin-service" in landing_url or "/error" in landing_url:
             reason, message = _diagnose_login_failure(landing_url, landing)
@@ -397,6 +411,15 @@ class EuDataActClient:
             raise EuDataActAuthError(f"login did not land on portal (url={landing_url})")
         self._logged_in = True
         _LOGGER.debug("EU Data Act login OK")
+
+    async def _skip_marketing_consent(self, page: str, url: str, hdrs: dict) -> tuple[str, str]:
+        """Continue past VW's optional marketing-consent page without opting in."""
+        callback = _marketing_consent_callback(url)
+        if callback is None:
+            return page, url
+        _LOGGER.debug("EU Data Act login: skipping VW's optional marketing consent page")
+        async with self._session.get(callback, headers={**hdrs, "Referer": url}) as resp:
+            return await resp.text(), str(resp.url)
 
     async def _ensure_login(self) -> None:
         if not self._logged_in:
