@@ -41,6 +41,7 @@ from .eu_data_act import (
     EuDataActClient,
     EuDataActError,
 )
+from .http2_session import Http2Session, create_client
 from .website_portal import WebsitePortalClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _start_portal(self) -> ConfigFlowResult:
         """Attempt the website-portal login; route to OTP step if required."""
-        session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
+        session = Http2Session(create_client(self.hass))
         self._portal = WebsitePortalClient(
             session, email=self._collected[CONF_EMAIL], password=self._collected[CONF_PASSWORD]
         )

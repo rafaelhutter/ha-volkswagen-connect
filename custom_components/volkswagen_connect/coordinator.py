@@ -41,6 +41,7 @@ from .eu_data_act import (
     EuDataActError,
     EuDataActNotConfigured,
 )
+from .http2_session import Http2Session, create_client
 from .website_portal import (
     WebsitePortalAuthError,
     WebsitePortalClient,
@@ -200,7 +201,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         cookies = entry.data.get(CONF_WEBSITE_COOKIES)
         if cookies:
             self.portal = WebsitePortalClient(
-                async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
+                Http2Session(create_client(hass)),
                 email=entry.data[CONF_EMAIL],
                 password=entry.data[CONF_PASSWORD],
             )
