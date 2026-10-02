@@ -107,6 +107,8 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
         data = dict(self._collected)
         if self._portal_ready and self._portal is not None:
             data[CONF_WEBSITE_COOKIES] = self._portal.export_cookies()
+        else:
+            data.pop(CONF_WEBSITE_COOKIES, None)
         if self._is_reauth:
             return self.async_update_reload_and_abort(self._get_reauth_entry(), data=data)
         if self._is_reconfigure:

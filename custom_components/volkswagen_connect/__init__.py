@@ -85,6 +85,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: VolkswagenConnectConfigE
     await _migrate_binary_keys(hass, entry)
     _purge_portal_duplicates(hass, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if coordinator.portal is None:
+        _LOGGER.warning("No volkswagen.de portal session stored; requesting a new login")
+        entry.async_start_reauth(hass)
     return True
 
 
