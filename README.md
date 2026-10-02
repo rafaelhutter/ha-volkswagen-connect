@@ -60,6 +60,9 @@ for a fresh code does Home Assistant show a **Reauthentication required**
 prompt: re-enter your password plus the email OTP there and the data resumes.
 No need to remove and re-add anything. The background attempt that noticed it
 may already have sent you one code; ignore that one and use the newest email.
+If the volkswagen.de login couldn't be finished during setup (say VW was down),
+the integration starts on EU Data Act alone and shows the same prompt, so you
+can finish the login once VW is back.
 
 VW sometimes interrupts an otherwise-valid session with a **consent/permissions
 screen**; the integration detects this and tells you. Accept it once on
