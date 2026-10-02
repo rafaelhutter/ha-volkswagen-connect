@@ -50,6 +50,19 @@ class _FakeSession:
         return _FakeResponse(self._status)
 
 
+class _LandingSession(_FakeSession):
+    """Answers every GET with one fixed status on one fixed URL, no redirect."""
+
+    def __init__(self, status, url):
+        super().__init__(status)
+        self._url = url
+
+    def get(self, *args, **kwargs):
+        r = _FakeResponse(self._status)
+        r.url = self._url
+        return r
+
+
 def client(silent_error, login_result):
     c = WebsitePortalClient(None, "a@b.c", "pw")
     calls = {"login": 0, "silent": 0}
@@ -159,6 +172,23 @@ async def main():
             pass
         except WebsitePortalError as err:
             raise AssertionError(f"{status} raised {type(err).__name__}") from err
+
+    # an error page is no login, but no reason for reauth either
+    callback = "https://www.volkswagen.de/app/authproxy/login/oauth2/code/vw-de?code=c"
+    for what, call in (
+        ("landing", lambda c: c.begin_login()),
+        ("login hop", lambda c: c._follow(callback)),
+    ):
+        c = WebsitePortalClient(_LandingSession(502, PORTAL_OK), "a@b.c", "pw")
+        try:
+            await call(c)
+            raise AssertionError(f"expected raise for a 502 {what}")
+        except WebsitePortalAuthError as err:
+            raise AssertionError(f"502 {what} asked for reauth") from err
+        except WebsitePortalError:
+            pass
+    c = WebsitePortalClient(_LandingSession(200, PORTAL_OK), "a@b.c", "pw")
+    assert await c.begin_login() == "ok"
 
     print("ok")
 
