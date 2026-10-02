@@ -250,6 +250,8 @@ class WebsitePortalClient:
             if "/u/mfa-email-challenge" in cur and status == 200:
                 raise _MfaRequired(cur, body)
             if not loc:
+                if status >= 400:
+                    raise WebsitePortalError(f"login hop answered HTTP {status}: {cur}")
                 return cur
             ref = urljoin(ref, loc)
         raise WebsitePortalError("too many redirects during login")
@@ -263,8 +265,11 @@ class WebsitePortalClient:
             max_redirects=MAX_REDIRECTS,
         ) as r:
             page_url = str(r.url)
+            status = r.status
         if "/u/login" not in page_url:
             _validate_landing(page_url)
+            if status != 200:
+                raise WebsitePortalError(f"portal login landed with HTTP {status}")
             return "ok"  # silent SSO
         state = parse_qs(urlparse(page_url).query).get("state", [None])[0]
         async with self._session.post(
@@ -278,7 +283,7 @@ class WebsitePortalClient:
         if not loc:
             raise WebsitePortalAuthError("login rejected (wrong credentials?)")
         try:
-            await self._follow(urljoin(cur, loc))
+            _validate_landing(await self._follow(urljoin(cur, loc)))
             return "ok"
         except _MfaRequired as mfa:
             fields, action = _parse_form(mfa.html)
@@ -303,7 +308,7 @@ class WebsitePortalClient:
             cur = str(r.url)
         if not loc:
             raise WebsitePortalAuthError("OTP rejected")
-        await self._follow(urljoin(cur, loc))
+        _validate_landing(await self._follow(urljoin(cur, loc)))
         self._mfa = None
         return "ok"
 
