@@ -125,16 +125,16 @@
         "name": "Sunroof position"
       },
       "inspection_due_days": {
-        "name": "Inspection due"
+        "name": "Inspection due (days)"
       },
       "inspection_due_km": {
-        "name": "Inspection due"
+        "name": "Inspection due (distance)"
       },
       "oil_service_due_days": {
-        "name": "Oil service due"
+        "name": "Oil service due (days)"
       },
       "oil_service_due_km": {
-        "name": "Oil service due"
+        "name": "Oil service due (distance)"
       },
       "last_report": {
         "name": "Last vehicle report"

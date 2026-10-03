@@ -122,16 +122,16 @@
         "name": "Posizione tetto apribile"
       },
       "inspection_due_days": {
-        "name": "Tagliando tra"
+        "name": "Tagliando tra (giorni)"
       },
       "inspection_due_km": {
-        "name": "Tagliando tra"
+        "name": "Tagliando tra (distanza)"
       },
       "oil_service_due_days": {
-        "name": "Cambio olio tra"
+        "name": "Cambio olio tra (giorni)"
       },
       "oil_service_due_km": {
-        "name": "Cambio olio tra"
+        "name": "Cambio olio tra (distanza)"
       },
       "last_report": {
         "name": "Ultimo rapporto veicolo"

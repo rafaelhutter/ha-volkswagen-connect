@@ -122,16 +122,16 @@
         "name": "Position du toit ouvrant"
       },
       "inspection_due_days": {
-        "name": "Révision dans"
+        "name": "Révision dans (jours)"
       },
       "inspection_due_km": {
-        "name": "Prochaine révision"
+        "name": "Révision dans (distance)"
       },
       "oil_service_due_days": {
-        "name": "Vidange dans"
+        "name": "Vidange dans (jours)"
       },
       "oil_service_due_km": {
-        "name": "Prochaine vidange"
+        "name": "Vidange dans (distance)"
       },
       "last_report": {
         "name": "Dernier rapport du véhicule"

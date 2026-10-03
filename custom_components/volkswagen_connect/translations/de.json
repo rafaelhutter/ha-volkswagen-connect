@@ -122,16 +122,16 @@
         "name": "Schiebedachposition"
       },
       "inspection_due_days": {
-        "name": "Inspektion fällig in"
+        "name": "Inspektion fällig in (Tage)"
       },
       "inspection_due_km": {
-        "name": "Inspektion fällig in"
+        "name": "Inspektion fällig in (Strecke)"
       },
       "oil_service_due_days": {
-        "name": "Ölwechsel fällig in"
+        "name": "Ölwechsel fällig in (Tage)"
       },
       "oil_service_due_km": {
-        "name": "Ölwechsel fällig in"
+        "name": "Ölwechsel fällig in (Strecke)"
       },
       "last_report": {
         "name": "Letzte Fahrzeugmeldung"
