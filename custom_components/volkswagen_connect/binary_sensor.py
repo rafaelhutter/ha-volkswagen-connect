@@ -20,7 +20,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, translation_key
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
 # Boolean keys exposed as binary sensors with a device class. ``invert`` maps our
@@ -28,15 +28,15 @@ from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordina
 # ``encoding`` selects how the raw value is decoded (see _DECODERS below);
 # defaults to "bool" (VW's plain true/false fields).
 BINARY_KEYS: dict[str, dict[str, Any]] = {
-    "locked": {"name": "Lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True},
-    "open": {"name": "Open", "device_class": BinarySensorDeviceClass.OPENING},
+    "locked": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True},
+    "open": {"device_class": BinarySensorDeviceClass.OPENING},
     # Detailed lock states for a secondary component (vs. the flat "locked"
     # aggregate above) - diagnostic, matching how the reference vag_connect
     # integration buckets its own "Coffre verrouillé"/"Capot verrouillé".
-    "trunk.locked": {"name": "Trunk lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "category": EntityCategory.DIAGNOSTIC},
-    "trunk.open": {"name": "Trunk", "device_class": BinarySensorDeviceClass.OPENING},
-    "parking_brake": {"name": "Parking brake", "encoding": "onoff", "category": EntityCategory.DIAGNOSTIC},
-    "parking_lights": {"name": "Parking lights", "device_class": BinarySensorDeviceClass.LIGHT, "encoding": "lights", "category": EntityCategory.DIAGNOSTIC},
+    "trunk.locked": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "category": EntityCategory.DIAGNOSTIC},
+    "trunk.open": {"device_class": BinarySensorDeviceClass.OPENING},
+    "parking_brake": {"encoding": "onoff", "category": EntityCategory.DIAGNOSTIC},
+    "parking_lights": {"device_class": BinarySensorDeviceClass.LIGHT, "encoding": "lights", "category": EntityCategory.DIAGNOSTIC},
     # Per-door/component state fields from the EU Data Act "access" cluster.
     # VW encodes these as 0=unsupported, 1=invalid, 2/3=the two real states
     # (which one is "2" depends on the field - see each comment below). This
@@ -49,49 +49,49 @@ BINARY_KEYS: dict[str, dict[str, Any]] = {
     # Lock states: 2 = locked, 3 = unlocked. Per-door/component detail beyond
     # the flat "locked" aggregate above - diagnostic, same reasoning as
     # trunk.locked/parking_brake above.
-    "locked_state_front_left_door": {"name": "Front left door lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "locked_state_front_right_door": {"name": "Front right door lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state_front_left_door": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state_front_right_door": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
     # VW's own dataFieldName has a double underscore here (confirmed against
     # the actual delivered payload) - every other door uses a single one.
-    "locked_state__rear_left_door": {"name": "Rear left door lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "locked_state_rear_right_door": {"name": "Rear right door lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "locked_state_tailgate": {"name": "Tailgate lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "locked_state_front_engine_bonnet": {"name": "Bonnet lock", "device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state__rear_left_door": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state_rear_right_door": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state_tailgate": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "locked_state_front_engine_bonnet": {"device_class": BinarySensorDeviceClass.LOCK, "invert": True, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
     # Open states: 2 = open, 3 = closed.
-    "open_state_front_left_door": {"name": "Front left door", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
-    "open_state_front_right_door": {"name": "Front right door", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
-    "open_state_rear_left_door": {"name": "Rear left door", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
-    "open_state_rear_right_door": {"name": "Rear right door", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
-    "open_state_tailgate": {"name": "Tailgate", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
-    "open_state_front_engine_bonnet": {"name": "Bonnet", "device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_front_left_door": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_front_right_door": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_rear_left_door": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_rear_right_door": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_tailgate": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
+    "open_state_front_engine_bonnet": {"device_class": BinarySensorDeviceClass.DOOR, "encoding": "state"},
     # Safe/latched states. The sibling project's comment claims 2=safe/3=unsafe
     # (matching the other "state" fields' 2/3 order), but on this Tiguan that
     # produced "Dangereux" on every door/hood/tailgate while fully closed and
     # locked — so this field is inverted relative to the others: observed
     # behaviour is 2 = unsafe, 3 = safe (properly latched).
-    "safe_state_front_left_door": {"name": "Front left door latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "safe_state_front_right_door": {"name": "Front right door latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "safe_state_rear_left_door": {"name": "Rear left door latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "safe_state_rear_right_door": {"name": "Rear right door latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "safe_state_tailgate": {"name": "Tailgate latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "safe_state_front_engine_bonnet": {"name": "Bonnet latched", "device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_front_left_door": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_front_right_door": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_rear_left_door": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_rear_right_door": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_tailgate": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "safe_state_front_engine_bonnet": {"device_class": BinarySensorDeviceClass.SAFETY, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
     # Window lifter / sunroof open-state: 2 = open, 3 = closed. Kept primary -
     # the reference vag_connect integration shows its own window/sunroof
     # open-state entities as plain primary sensors, not diagnostic (only the
     # numeric *position%* sensors in sensor.py are diagnostic there).
-    "state_front_left_door_window_lifter": {"name": "Front left window", "device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
-    "state_front_right_door_window_lifter": {"name": "Front right window", "device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
-    "state_rear_left_door_window_lifter": {"name": "Rear left window", "device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
-    "state_rear_right_door_window_lifter": {"name": "Rear right window", "device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
-    "state_sunroof_motor_hood_1": {"name": "Sunroof", "device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
-    "state_sunroof_motor_hood_3": {"name": "Sunroof motor 3", "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "state_front_left_door_window_lifter": {"device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
+    "state_front_right_door_window_lifter": {"device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
+    "state_rear_left_door_window_lifter": {"device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
+    "state_rear_right_door_window_lifter": {"device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
+    "state_sunroof_motor_hood_1": {"device_class": BinarySensorDeviceClass.WINDOW, "encoding": "state"},
+    "state_sunroof_motor_hood_3": {"encoding": "state", "category": EntityCategory.DIAGNOSTIC},
     # Likely the ID.x/dotted counterpart of the flat "open_state_front_engine_bonnet"
     # above (same pattern as mileage/odometer or outdoor/outside_temperature) - kept
     # primary like its sibling rather than diagnostic, since only one of the two
     # ever populates per vehicle.
-    "state_of_hood": {"name": "Hood", "device_class": BinarySensorDeviceClass.OPENING, "encoding": "state"},
-    "state_service_hatch": {"name": "Service hatch (fuel/charge flap)", "device_class": BinarySensorDeviceClass.OPENING, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
-    "state_spoiler": {"name": "Spoiler", "device_class": BinarySensorDeviceClass.OPENING, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "state_of_hood": {"device_class": BinarySensorDeviceClass.OPENING, "encoding": "state"},
+    "state_service_hatch": {"device_class": BinarySensorDeviceClass.OPENING, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
+    "state_spoiler": {"device_class": BinarySensorDeviceClass.OPENING, "encoding": "state", "category": EntityCategory.DIAGNOSTIC},
 }
 
 _TRUE = {"true", "1", "on", "yes"}
@@ -221,7 +221,7 @@ class VolkswagenConnectBinarySensor(
         self._invert = meta.get("invert", False)
         self._decode = _DECODERS[meta.get("encoding", "bool")]
         self._attr_unique_id = f"{vin}_{key}"
-        self._attr_name = meta["name"]
+        self._attr_translation_key = translation_key(key)
         if "device_class" in meta:
             self._attr_device_class = meta["device_class"]
         if "category" in meta:

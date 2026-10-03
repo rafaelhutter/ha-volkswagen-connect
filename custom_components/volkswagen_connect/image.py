@@ -20,6 +20,11 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
+# VILMA's views; each has an image_view_<view> name in strings.json.
+TRANSLATED_VIEWS = frozenset(
+    f"{side}_{angle}" for side in ("front", "side", "back") for angle in ("left", "center", "right")
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -79,10 +84,13 @@ class VolkswagenConnectVehicleImage(CoordinatorEntity[VolkswagenConnectCoordinat
         self._view = view  # None = primary side-left view (legacy "Image" entity)
         if view is None:
             self._attr_unique_id = f"{vin}_image"
-            self._attr_name = "Image"
+            self._attr_translation_key = "image"
         else:
             self._attr_unique_id = f"{vin}_image_{view}"
-            self._attr_name = f"Image {view.replace('_', ' ')}"
+            if view in TRANSLATED_VIEWS:
+                self._attr_translation_key = f"image_view_{view}"
+            else:  # a view VW added later keeps a readable English name
+                self._attr_name = f"Image {view.replace('_', ' ')}"
             self._attr_entity_registry_enabled_default = False
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._current_url: str | None = None

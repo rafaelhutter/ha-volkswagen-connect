@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 DOMAIN = "volkswagen_connect"
@@ -23,3 +24,8 @@ DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
 STATUS_OK = "ok"
 STATUS_NO_DATA = "no_data"
 STATUS_NOT_CONFIGURED = "not_configured"
+
+
+def translation_key(key: str) -> str:
+    """HA translation key for a data key: lowercase, no dots, no doubled underscores."""
+    return re.sub(r"[._]+", "_", key).lower()

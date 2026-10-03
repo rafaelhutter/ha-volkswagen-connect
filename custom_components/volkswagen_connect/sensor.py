@@ -37,7 +37,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .binary_sensor import BINARY_KEYS
-from .const import DOMAIN
+from .const import DOMAIN, translation_key
 from .coordinator import VolkswagenConnectConfigEntry, VolkswagenConnectCoordinator, VehicleData
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,11 +80,10 @@ def _tenths(value: Any) -> Any:
     return round(value / 10, 1)
 
 
-# Friendly metadata for known (authproxy-derived) keys. Unknown keys still get
-# a generic sensor.
+# Friendly metadata for known (authproxy-derived) keys; names live in strings.json.
+# Unknown keys still get a generic sensor.
 KNOWN_KEYS: dict[str, dict[str, Any]] = {
     "odometer": {
-        "name": "Odometer",
         "device_class": SensorDeviceClass.DISTANCE,
         "unit": UnitOfLength.KILOMETERS,
         "state_class": SensorStateClass.TOTAL_INCREASING,
@@ -92,96 +91,96 @@ KNOWN_KEYS: dict[str, dict[str, Any]] = {
     },
     # Flat (pre-ID.x) mileage/range fields - this Tiguan reports these instead
     # of the dotted "mileage.value"/"primary_range" equivalents above.
-    "mileage": {"name": "Mileage", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
-    "cruising_range_combined": {"name": "Range (combined)", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
-    "cruising_range_primary_engine": {"name": "Range (primary)", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
-    "cruising_range_secondary_engine": {"name": "Range (secondary)", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:ev-station"},
-    "fuel_level_current_level": {"name": "Fuel level", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
+    "mileage": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
+    "cruising_range_combined": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
+    "cruising_range_primary_engine": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
+    "cruising_range_secondary_engine": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:ev-station"},
+    "fuel_level_current_level": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station"},
     # The flat-payload EVs (e-up!, e-Golf) report their HV battery here (#33).
-    "state_of_charge": {"name": "Battery state of charge", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "state_of_charge": {"device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
     # Trip-computer averages, reported in tenths (#12).
-    "long_term_data_average_fuel_consumption": {"name": "Average consumption (long term)", "unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},
-    "short_term_data_average_fuel_consumption": {"name": "Average consumption (short term)", "unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},
-    "fuel_level__accuracy": {"name": "Fuel level accuracy", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gauge", "category": EntityCategory.DIAGNOSTIC},
+    "long_term_data_average_fuel_consumption": {"unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},
+    "short_term_data_average_fuel_consumption": {"unit": "L/100 km", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-station-outline", "transform": _tenths},
+    "fuel_level__accuracy": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gauge", "category": EntityCategory.DIAGNOSTIC},
     # oil_level_total_max (a 0-1 scale reference, not a liter capacity - the
     # sibling vw_eu_data_act project labels it "L" but that doesn't match a
     # real engine's oil capacity) is left uncurated; this is the meaningful
     # percentage gauge.
-    "oil_level_actual_level": {"name": "Oil level", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:oil-level", "category": EntityCategory.DIAGNOSTIC},
-    "cng_gas_level": {"name": "CNG gas level", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-cylinder"},
-    "position_front_left_door_window_lifter": {"name": "Front left window position", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
-    "position_front_right_door_window_lifter": {"name": "Front right window position", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
-    "position_rear_left_door_window_lifter": {"name": "Rear left window position", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
-    "position_rear_right_door_window_lifter": {"name": "Rear right window position", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
-    "position_sunroof_motor_hood_1": {"name": "Sunroof position", "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:car-convertible", "category": EntityCategory.DIAGNOSTIC},
+    "oil_level_actual_level": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:oil-level", "category": EntityCategory.DIAGNOSTIC},
+    "cng_gas_level": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:gas-cylinder"},
+    "position_front_left_door_window_lifter": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
+    "position_front_right_door_window_lifter": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
+    "position_rear_left_door_window_lifter": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
+    "position_rear_right_door_window_lifter": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:window-open-variant", "category": EntityCategory.DIAGNOSTIC},
+    "position_sunroof_motor_hood_1": {"unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:car-convertible", "category": EntityCategory.DIAGNOSTIC},
     # Day-count is diagnostic (matches vag_connect's own "Entretien dans"/
     # "Vidange dans"); the km-count stays primary (its "Prochain entretien"/
     # "Prochaine vidange").
-    "inspection_due_days": {"name": "Inspection due", "unit": UnitOfTime.DAYS, "icon": "mdi:wrench-clock", "category": EntityCategory.DIAGNOSTIC},
-    "inspection_due_km": {"name": "Inspection due", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
-    "oil_service_due_days": {"name": "Oil service due", "unit": UnitOfTime.DAYS, "icon": "mdi:oil", "category": EntityCategory.DIAGNOSTIC},
-    "oil_service_due_km": {"name": "Oil service due", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
-    "last_report": {"name": "Last vehicle report", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
+    "inspection_due_days": {"unit": UnitOfTime.DAYS, "icon": "mdi:wrench-clock", "category": EntityCategory.DIAGNOSTIC},
+    "inspection_due_km": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
+    "oil_service_due_days": {"unit": UnitOfTime.DAYS, "icon": "mdi:oil", "category": EntityCategory.DIAGNOSTIC},
+    "oil_service_due_km": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS},
+    "last_report": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
     # Vehicle health + lock history (from the authproxy)
-    "warning_lights": {"name": "Warning lights", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:car-light-alert"},
-    "last_lock_action": {"name": "Last lock command", "icon": "mdi:car-key", "category": EntityCategory.DIAGNOSTIC},
-    "last_lock_action_time": {"name": "Last lock command time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
+    "warning_lights": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:car-light-alert"},
+    "last_lock_action": {"icon": "mdi:car-key", "category": EntityCategory.DIAGNOSTIC},
+    "last_lock_action_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
     # Live battery / charging (from charging/status)
-    "soc": {"name": "Battery", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
-    "electric_range": {"name": "Electric range", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
-    "target_soc": {"name": "Target battery", "unit": PERCENTAGE, "icon": "mdi:battery-charging-high"},
-    "battery_temp": {"name": "Battery temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
-    "charging_state": {"name": "Charging state", "icon": "mdi:ev-station"},
-    "charge_power": {"name": "Charge power", "device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},
-    "charge_rate": {"name": "Charge rate", "unit": UnitOfSpeed.KILOMETERS_PER_HOUR, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:speedometer"},
-    "charge_time_remaining": {"name": "Charge time remaining", "device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.MINUTES, "icon": "mdi:timer-sand"},
-    "charge_mode": {"name": "Charge mode", "icon": "mdi:cog"},
-    "plug_connection": {"name": "Plug", "icon": "mdi:power-plug"},
-    "plug_lock": {"name": "Plug lock", "icon": "mdi:lock", "category": EntityCategory.DIAGNOSTIC},
-    "external_power": {"name": "External power", "icon": "mdi:transmission-tower"},
+    "soc": {"device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "electric_range": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
+    "target_soc": {"unit": PERCENTAGE, "icon": "mdi:battery-charging-high"},
+    "battery_temp": {"device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
+    "charging_state": {"icon": "mdi:ev-station"},
+    "charge_power": {"device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},
+    "charge_rate": {"unit": UnitOfSpeed.KILOMETERS_PER_HOUR, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:speedometer"},
+    "charge_time_remaining": {"device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.MINUTES, "icon": "mdi:timer-sand"},
+    "charge_mode": {"icon": "mdi:cog"},
+    "plug_connection": {"icon": "mdi:power-plug"},
+    "plug_lock": {"icon": "mdi:lock", "category": EntityCategory.DIAGNOSTIC},
+    "external_power": {"icon": "mdi:transmission-tower"},
     # --- EU Data Act fields (dataFieldName keys) --------------------------------
     # Friendly labels + units for the meaningful "continuous data" signals. The
     # long tail of raw fields keeps its dotted dataFieldName as its label.
-    "mileage.value": {"name": "Mileage", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
-    "primary_range": {"name": "Primary range", "device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
-    "battery_level_HV.value": {"name": "Battery level", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
-    "battery_state_report.soc": {"name": "Battery state of charge", "device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
-    "battery_state_report.charge_power": {"name": "Charge power (report)", "device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},
-    "battery_state_report.charge_rate": {"name": "Charge rate (report)", "unit": UnitOfSpeed.KILOMETERS_PER_HOUR, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:speedometer"},
-    "battery_state_report.charge_energy": {"name": "Charge energy", "device_class": SensorDeviceClass.ENERGY, "unit": UnitOfEnergy.KILO_WATT_HOUR, "icon": "mdi:lightning-bolt", "category": EntityCategory.DIAGNOSTIC},
-    "battery_care_mode.charge_bcam_threshold": {"name": "Battery care threshold", "unit": PERCENTAGE, "icon": "mdi:battery-heart-variant", "category": EntityCategory.DIAGNOSTIC},
-    "settings.target_soc": {"name": "Target SoC (setting)", "unit": PERCENTAGE, "icon": "mdi:battery-charging-high", "category": EntityCategory.DIAGNOSTIC},
-    "outdoor_temperature": {"name": "Outdoor temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT},
+    "mileage.value": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.TOTAL_INCREASING, "icon": "mdi:counter"},
+    "primary_range": {"device_class": SensorDeviceClass.DISTANCE, "unit": UnitOfLength.KILOMETERS, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:map-marker-distance"},
+    "battery_level_HV.value": {"device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.soc": {"device_class": SensorDeviceClass.BATTERY, "unit": PERCENTAGE, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.charge_power": {"device_class": SensorDeviceClass.POWER, "unit": UnitOfPower.KILO_WATT, "state_class": SensorStateClass.MEASUREMENT},
+    "battery_state_report.charge_rate": {"unit": UnitOfSpeed.KILOMETERS_PER_HOUR, "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:speedometer"},
+    "battery_state_report.charge_energy": {"device_class": SensorDeviceClass.ENERGY, "unit": UnitOfEnergy.KILO_WATT_HOUR, "icon": "mdi:lightning-bolt", "category": EntityCategory.DIAGNOSTIC},
+    "battery_care_mode.charge_bcam_threshold": {"unit": PERCENTAGE, "icon": "mdi:battery-heart-variant", "category": EntityCategory.DIAGNOSTIC},
+    "settings.target_soc": {"unit": PERCENTAGE, "icon": "mdi:battery-charging-high", "category": EntityCategory.DIAGNOSTIC},
+    "outdoor_temperature": {"device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT},
     # Flat (pre-ID.x) equivalent of "outdoor_temperature", reported in Kelvin.
-    "outside_temperature": {"name": "Outside temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "transform": _kelvin_to_celsius},
+    "outside_temperature": {"device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "transform": _kelvin_to_celsius},
     # Per VW's Data Dictionary: coldest/warmest battery *module* temperature.
-    "min_temperature": {"name": "Battery module min temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
-    "max_temperature": {"name": "Battery module max temperature", "device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
-    "car_captured_time": {"name": "Car captured time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
-    "car_captured_utc_timestamp": {"name": "Car captured (UTC)", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
-    "instrument_cluster_time": {"name": "Instrument cluster time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
-    "profile_state_report.car_captured_time": {"name": "Profile car captured time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
-    "profile_state_report.instrument_cluster_time": {"name": "Profile instrument cluster time", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
-    "profile_state_report.next_charging_timer_information.estimated_start_time": {"name": "Next charge start (est.)", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-start"},
-    "profile_state_report.next_charging_timer_information.estimated_finish_time": {"name": "Next charge finish (est.)", "device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-end"},
-    "battery_state_report.remaining_charging_time_complete": {"name": "Remaining charge time", "device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.SECONDS, "icon": "mdi:timer-sand", "category": EntityCategory.DIAGNOSTIC},
-    "remaining_climate_time": {"name": "Remaining climate time", "device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.SECONDS, "icon": "mdi:timer-sand", "category": EntityCategory.DIAGNOSTIC},
-    "locked": {"name": "Locked", "icon": "mdi:lock"},
-    "open": {"name": "Open", "icon": "mdi:car-door"},
-    "parking_light_left": {"name": "Parking light left", "icon": "mdi:car-parking-lights", "category": EntityCategory.DIAGNOSTIC},
-    "parking_light_right": {"name": "Parking light right", "icon": "mdi:car-parking-lights", "category": EntityCategory.DIAGNOSTIC},
-    "window_heating_state": {"name": "Window heating", "icon": "mdi:car-defrost-rear", "category": EntityCategory.DIAGNOSTIC},
-    "additional_consumptions.residual_consumption": {"name": "Residual consumption", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:flash", "category": EntityCategory.DIAGNOSTIC},
-    "additional_consumptions.interior_climatization_consumption": {"name": "Climatisation consumption", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:fan", "category": EntityCategory.DIAGNOSTIC},
-    "slope_consumption_values.ascent_slope_consumption.physical_value": {"name": "Ascent slope consumption", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:trending-up", "category": EntityCategory.DIAGNOSTIC},
-    "slope_consumption_values.descent_slope_consumption.physical_value": {"name": "Descent slope consumption", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:trending-down", "category": EntityCategory.DIAGNOSTIC},
-    "energy_contents.current_energy_content.physical_value": {"name": "Current energy content", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:battery-charging", "category": EntityCategory.DIAGNOSTIC},
-    "energy_contents.maximal_energy_content.physical_value": {"name": "Maximal energy content", "state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:battery", "category": EntityCategory.DIAGNOSTIC},
-    "charging_state_report.charge_type": {"name": "Charge type", "icon": "mdi:ev-plug-type2", "category": EntityCategory.DIAGNOSTIC},
-    "charging_state_report.charge_mode": {"name": "Charge mode (report)", "icon": "mdi:cog", "category": EntityCategory.DIAGNOSTIC},
-    "charging_state_report.current_charge_state": {"name": "Charge state (report)", "icon": "mdi:ev-station", "category": EntityCategory.DIAGNOSTIC},
-    "settings.max_charge_current_ac": {"name": "Max AC charge current", "icon": "mdi:current-ac", "category": EntityCategory.DIAGNOSTIC},
-    "settings.charge_mode_selection": {"name": "Charge mode selection", "icon": "mdi:cog-outline", "category": EntityCategory.DIAGNOSTIC},
+    "min_temperature": {"device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
+    "max_temperature": {"device_class": SensorDeviceClass.TEMPERATURE, "unit": UnitOfTemperature.CELSIUS, "state_class": SensorStateClass.MEASUREMENT, "category": EntityCategory.DIAGNOSTIC},
+    "car_captured_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
+    "car_captured_utc_timestamp": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
+    "instrument_cluster_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
+    "profile_state_report.car_captured_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-check", "category": EntityCategory.DIAGNOSTIC},
+    "profile_state_report.instrument_cluster_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-outline", "category": EntityCategory.DIAGNOSTIC},
+    "profile_state_report.next_charging_timer_information.estimated_start_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-start"},
+    "profile_state_report.next_charging_timer_information.estimated_finish_time": {"device_class": SensorDeviceClass.TIMESTAMP, "icon": "mdi:clock-end"},
+    "battery_state_report.remaining_charging_time_complete": {"device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.SECONDS, "icon": "mdi:timer-sand", "category": EntityCategory.DIAGNOSTIC},
+    "remaining_climate_time": {"device_class": SensorDeviceClass.DURATION, "unit": UnitOfTime.SECONDS, "icon": "mdi:timer-sand", "category": EntityCategory.DIAGNOSTIC},
+    "locked": {"icon": "mdi:lock"},
+    "open": {"icon": "mdi:car-door"},
+    "parking_light_left": {"icon": "mdi:car-parking-lights", "category": EntityCategory.DIAGNOSTIC},
+    "parking_light_right": {"icon": "mdi:car-parking-lights", "category": EntityCategory.DIAGNOSTIC},
+    "window_heating_state": {"icon": "mdi:car-defrost-rear", "category": EntityCategory.DIAGNOSTIC},
+    "additional_consumptions.residual_consumption": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:flash", "category": EntityCategory.DIAGNOSTIC},
+    "additional_consumptions.interior_climatization_consumption": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:fan", "category": EntityCategory.DIAGNOSTIC},
+    "slope_consumption_values.ascent_slope_consumption.physical_value": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:trending-up", "category": EntityCategory.DIAGNOSTIC},
+    "slope_consumption_values.descent_slope_consumption.physical_value": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:trending-down", "category": EntityCategory.DIAGNOSTIC},
+    "energy_contents.current_energy_content.physical_value": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:battery-charging", "category": EntityCategory.DIAGNOSTIC},
+    "energy_contents.maximal_energy_content.physical_value": {"state_class": SensorStateClass.MEASUREMENT, "icon": "mdi:battery", "category": EntityCategory.DIAGNOSTIC},
+    "charging_state_report.charge_type": {"icon": "mdi:ev-plug-type2", "category": EntityCategory.DIAGNOSTIC},
+    "charging_state_report.charge_mode": {"icon": "mdi:cog", "category": EntityCategory.DIAGNOSTIC},
+    "charging_state_report.current_charge_state": {"icon": "mdi:ev-station", "category": EntityCategory.DIAGNOSTIC},
+    "settings.max_charge_current_ac": {"icon": "mdi:current-ac", "category": EntityCategory.DIAGNOSTIC},
+    "settings.charge_mode_selection": {"icon": "mdi:cog-outline", "category": EntityCategory.DIAGNOSTIC},
 }
 
 
@@ -408,7 +407,7 @@ class VolkswagenConnectCapturedSensor(_Base):
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:car-clock"
-    _attr_name = "Data captured"
+    _attr_translation_key = "data_captured"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: VolkswagenConnectCoordinator, vin: str) -> None:
@@ -432,7 +431,10 @@ class VolkswagenConnectValueSensor(_Base):
         self._attr_unique_id = f"{vin}_{key}"
         meta = KNOWN_KEYS.get(key, {})
         self._transform = meta.get("transform")
-        self._attr_name = meta.get("name") or _prettify(key)
+        if meta:
+            self._attr_translation_key = translation_key(key)
+        else:
+            self._attr_name = _prettify(key)
         if "device_class" in meta:
             self._attr_device_class = meta["device_class"]
         if "unit" in meta:
