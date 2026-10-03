@@ -69,6 +69,367 @@
           "no_data": "Nessun dato",
           "not_configured": "Nessuna richiesta configurata"
         }
+      },
+      "odometer": {
+        "name": "Contachilometri"
+      },
+      "mileage": {
+        "name": "Chilometraggio"
+      },
+      "cruising_range_combined": {
+        "name": "Autonomia (combinata)"
+      },
+      "cruising_range_primary_engine": {
+        "name": "Autonomia (primaria)"
+      },
+      "cruising_range_secondary_engine": {
+        "name": "Autonomia (secondaria)"
+      },
+      "fuel_level_current_level": {
+        "name": "Livello carburante"
+      },
+      "state_of_charge": {
+        "name": "Stato di carica batteria"
+      },
+      "long_term_data_average_fuel_consumption": {
+        "name": "Consumo medio (lungo periodo)"
+      },
+      "short_term_data_average_fuel_consumption": {
+        "name": "Consumo medio (breve periodo)"
+      },
+      "fuel_level_accuracy": {
+        "name": "Precisione livello carburante"
+      },
+      "oil_level_actual_level": {
+        "name": "Livello olio"
+      },
+      "cng_gas_level": {
+        "name": "Livello metano"
+      },
+      "position_front_left_door_window_lifter": {
+        "name": "Posizione finestrino anteriore sinistro"
+      },
+      "position_front_right_door_window_lifter": {
+        "name": "Posizione finestrino anteriore destro"
+      },
+      "position_rear_left_door_window_lifter": {
+        "name": "Posizione finestrino posteriore sinistro"
+      },
+      "position_rear_right_door_window_lifter": {
+        "name": "Posizione finestrino posteriore destro"
+      },
+      "position_sunroof_motor_hood_1": {
+        "name": "Posizione tetto apribile"
+      },
+      "inspection_due_days": {
+        "name": "Tagliando tra"
+      },
+      "inspection_due_km": {
+        "name": "Tagliando tra"
+      },
+      "oil_service_due_days": {
+        "name": "Cambio olio tra"
+      },
+      "oil_service_due_km": {
+        "name": "Cambio olio tra"
+      },
+      "last_report": {
+        "name": "Ultimo rapporto veicolo"
+      },
+      "warning_lights": {
+        "name": "Spie di avviso"
+      },
+      "last_lock_action": {
+        "name": "Ultimo comando di blocco"
+      },
+      "last_lock_action_time": {
+        "name": "Ora ultimo comando di blocco"
+      },
+      "soc": {
+        "name": "Batteria"
+      },
+      "electric_range": {
+        "name": "Autonomia elettrica"
+      },
+      "target_soc": {
+        "name": "Carica obiettivo"
+      },
+      "battery_temp": {
+        "name": "Temperatura batteria"
+      },
+      "charging_state": {
+        "name": "Stato di ricarica"
+      },
+      "charge_power": {
+        "name": "Potenza di ricarica"
+      },
+      "charge_rate": {
+        "name": "Velocità di ricarica"
+      },
+      "charge_time_remaining": {
+        "name": "Tempo di ricarica residuo"
+      },
+      "charge_mode": {
+        "name": "Modalità di ricarica"
+      },
+      "plug_connection": {
+        "name": "Spina"
+      },
+      "plug_lock": {
+        "name": "Blocco spina"
+      },
+      "external_power": {
+        "name": "Alimentazione esterna"
+      },
+      "mileage_value": {
+        "name": "Chilometraggio"
+      },
+      "primary_range": {
+        "name": "Autonomia primaria"
+      },
+      "battery_level_hv_value": {
+        "name": "Livello batteria"
+      },
+      "battery_state_report_soc": {
+        "name": "Stato di carica batteria"
+      },
+      "battery_state_report_charge_power": {
+        "name": "Potenza di ricarica (rapporto)"
+      },
+      "battery_state_report_charge_rate": {
+        "name": "Velocità di ricarica (rapporto)"
+      },
+      "battery_state_report_charge_energy": {
+        "name": "Energia di ricarica"
+      },
+      "battery_care_mode_charge_bcam_threshold": {
+        "name": "Soglia protezione batteria"
+      },
+      "settings_target_soc": {
+        "name": "Carica obiettivo (impostazione)"
+      },
+      "outdoor_temperature": {
+        "name": "Temperatura esterna"
+      },
+      "outside_temperature": {
+        "name": "Temperatura esterna"
+      },
+      "min_temperature": {
+        "name": "Temperatura min. modulo batteria"
+      },
+      "max_temperature": {
+        "name": "Temperatura max. modulo batteria"
+      },
+      "car_captured_time": {
+        "name": "Ora rilevamento veicolo"
+      },
+      "car_captured_utc_timestamp": {
+        "name": "Rilevamento veicolo (UTC)"
+      },
+      "instrument_cluster_time": {
+        "name": "Ora quadro strumenti"
+      },
+      "profile_state_report_car_captured_time": {
+        "name": "Ora rilevamento veicolo (profilo)"
+      },
+      "profile_state_report_instrument_cluster_time": {
+        "name": "Ora quadro strumenti (profilo)"
+      },
+      "profile_state_report_next_charging_timer_information_estimated_start_time": {
+        "name": "Inizio ricarica previsto"
+      },
+      "profile_state_report_next_charging_timer_information_estimated_finish_time": {
+        "name": "Fine ricarica prevista"
+      },
+      "battery_state_report_remaining_charging_time_complete": {
+        "name": "Tempo di ricarica residuo"
+      },
+      "remaining_climate_time": {
+        "name": "Tempo di climatizzazione residuo"
+      },
+      "locked": {
+        "name": "Bloccato"
+      },
+      "open": {
+        "name": "Aperto"
+      },
+      "parking_light_left": {
+        "name": "Luce di posizione sinistra"
+      },
+      "parking_light_right": {
+        "name": "Luce di posizione destra"
+      },
+      "window_heating_state": {
+        "name": "Riscaldamento vetri"
+      },
+      "additional_consumptions_residual_consumption": {
+        "name": "Consumo residuo"
+      },
+      "additional_consumptions_interior_climatization_consumption": {
+        "name": "Consumo climatizzazione"
+      },
+      "slope_consumption_values_ascent_slope_consumption_physical_value": {
+        "name": "Consumo in salita"
+      },
+      "slope_consumption_values_descent_slope_consumption_physical_value": {
+        "name": "Consumo in discesa"
+      },
+      "energy_contents_current_energy_content_physical_value": {
+        "name": "Contenuto energetico attuale"
+      },
+      "energy_contents_maximal_energy_content_physical_value": {
+        "name": "Contenuto energetico massimo"
+      },
+      "charging_state_report_charge_type": {
+        "name": "Tipo di ricarica"
+      },
+      "charging_state_report_charge_mode": {
+        "name": "Modalità di ricarica (rapporto)"
+      },
+      "charging_state_report_current_charge_state": {
+        "name": "Stato di ricarica (rapporto)"
+      },
+      "settings_max_charge_current_ac": {
+        "name": "Corrente di ricarica AC max"
+      },
+      "settings_charge_mode_selection": {
+        "name": "Selezione modalità di ricarica"
+      },
+      "data_captured": {
+        "name": "Dati rilevati"
+      }
+    },
+    "binary_sensor": {
+      "locked": {
+        "name": "Blocco"
+      },
+      "open": {
+        "name": "Apertura"
+      },
+      "trunk_locked": {
+        "name": "Blocco bagagliaio"
+      },
+      "trunk_open": {
+        "name": "Bagagliaio"
+      },
+      "parking_brake": {
+        "name": "Freno di stazionamento"
+      },
+      "parking_lights": {
+        "name": "Luci di posizione"
+      },
+      "locked_state_front_left_door": {
+        "name": "Blocco porta anteriore sinistra"
+      },
+      "locked_state_front_right_door": {
+        "name": "Blocco porta anteriore destra"
+      },
+      "locked_state_rear_left_door": {
+        "name": "Blocco porta posteriore sinistra"
+      },
+      "locked_state_rear_right_door": {
+        "name": "Blocco porta posteriore destra"
+      },
+      "locked_state_tailgate": {
+        "name": "Blocco portellone"
+      },
+      "locked_state_front_engine_bonnet": {
+        "name": "Blocco cofano"
+      },
+      "open_state_front_left_door": {
+        "name": "Porta anteriore sinistra"
+      },
+      "open_state_front_right_door": {
+        "name": "Porta anteriore destra"
+      },
+      "open_state_rear_left_door": {
+        "name": "Porta posteriore sinistra"
+      },
+      "open_state_rear_right_door": {
+        "name": "Porta posteriore destra"
+      },
+      "open_state_tailgate": {
+        "name": "Portellone"
+      },
+      "open_state_front_engine_bonnet": {
+        "name": "Cofano"
+      },
+      "safe_state_front_left_door": {
+        "name": "Porta anteriore sinistra agganciata"
+      },
+      "safe_state_front_right_door": {
+        "name": "Porta anteriore destra agganciata"
+      },
+      "safe_state_rear_left_door": {
+        "name": "Porta posteriore sinistra agganciata"
+      },
+      "safe_state_rear_right_door": {
+        "name": "Porta posteriore destra agganciata"
+      },
+      "safe_state_tailgate": {
+        "name": "Portellone agganciato"
+      },
+      "safe_state_front_engine_bonnet": {
+        "name": "Cofano agganciato"
+      },
+      "state_front_left_door_window_lifter": {
+        "name": "Finestrino anteriore sinistro"
+      },
+      "state_front_right_door_window_lifter": {
+        "name": "Finestrino anteriore destro"
+      },
+      "state_rear_left_door_window_lifter": {
+        "name": "Finestrino posteriore sinistro"
+      },
+      "state_rear_right_door_window_lifter": {
+        "name": "Finestrino posteriore destro"
+      },
+      "state_sunroof_motor_hood_1": {
+        "name": "Tetto apribile"
+      },
+      "state_sunroof_motor_hood_3": {
+        "name": "Motore tetto apribile 3"
+      },
+      "state_of_hood": {
+        "name": "Cofano"
+      },
+      "state_service_hatch": {
+        "name": "Sportello carburante/ricarica"
+      },
+      "state_spoiler": {
+        "name": "Spoiler"
+      }
+    },
+    "image": {
+      "image": {
+        "name": "Immagine"
+      },
+      "image_view_front_left": {
+        "name": "Immagine (anteriore sinistra)"
+      },
+      "image_view_front_center": {
+        "name": "Immagine (anteriore centro)"
+      },
+      "image_view_front_right": {
+        "name": "Immagine (anteriore destra)"
+      },
+      "image_view_side_left": {
+        "name": "Immagine (lato sinistra)"
+      },
+      "image_view_side_center": {
+        "name": "Immagine (lato centro)"
+      },
+      "image_view_side_right": {
+        "name": "Immagine (lato destra)"
+      },
+      "image_view_back_left": {
+        "name": "Immagine (posteriore sinistra)"
+      },
+      "image_view_back_center": {
+        "name": "Immagine (posteriore centro)"
+      },
+      "image_view_back_right": {
+        "name": "Immagine (posteriore destra)"
       }
     }
   }
