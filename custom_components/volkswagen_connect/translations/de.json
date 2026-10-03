@@ -69,6 +69,367 @@
           "no_data": "Noch keine Daten",
           "not_configured": "Keine Datenanfrage eingerichtet"
         }
+      },
+      "odometer": {
+        "name": "Kilometerstand"
+      },
+      "mileage": {
+        "name": "Kilometerstand"
+      },
+      "cruising_range_combined": {
+        "name": "Reichweite (gesamt)"
+      },
+      "cruising_range_primary_engine": {
+        "name": "Reichweite (primär)"
+      },
+      "cruising_range_secondary_engine": {
+        "name": "Reichweite (sekundär)"
+      },
+      "fuel_level_current_level": {
+        "name": "Tankfüllstand"
+      },
+      "state_of_charge": {
+        "name": "Batterieladestand"
+      },
+      "long_term_data_average_fuel_consumption": {
+        "name": "Durchschnittsverbrauch (Langzeit)"
+      },
+      "short_term_data_average_fuel_consumption": {
+        "name": "Durchschnittsverbrauch (Kurzzeit)"
+      },
+      "fuel_level_accuracy": {
+        "name": "Genauigkeit Tankfüllstand"
+      },
+      "oil_level_actual_level": {
+        "name": "Ölstand"
+      },
+      "cng_gas_level": {
+        "name": "Erdgas-Füllstand"
+      },
+      "position_front_left_door_window_lifter": {
+        "name": "Fensterposition vorne links"
+      },
+      "position_front_right_door_window_lifter": {
+        "name": "Fensterposition vorne rechts"
+      },
+      "position_rear_left_door_window_lifter": {
+        "name": "Fensterposition hinten links"
+      },
+      "position_rear_right_door_window_lifter": {
+        "name": "Fensterposition hinten rechts"
+      },
+      "position_sunroof_motor_hood_1": {
+        "name": "Schiebedachposition"
+      },
+      "inspection_due_days": {
+        "name": "Inspektion fällig in"
+      },
+      "inspection_due_km": {
+        "name": "Inspektion fällig in"
+      },
+      "oil_service_due_days": {
+        "name": "Ölwechsel fällig in"
+      },
+      "oil_service_due_km": {
+        "name": "Ölwechsel fällig in"
+      },
+      "last_report": {
+        "name": "Letzte Fahrzeugmeldung"
+      },
+      "warning_lights": {
+        "name": "Warnleuchten"
+      },
+      "last_lock_action": {
+        "name": "Letzter Verriegelungsbefehl"
+      },
+      "last_lock_action_time": {
+        "name": "Zeitpunkt letzter Verriegelungsbefehl"
+      },
+      "soc": {
+        "name": "Batterie"
+      },
+      "electric_range": {
+        "name": "Elektrische Reichweite"
+      },
+      "target_soc": {
+        "name": "Ziel-Ladestand"
+      },
+      "battery_temp": {
+        "name": "Batterietemperatur"
+      },
+      "charging_state": {
+        "name": "Ladezustand"
+      },
+      "charge_power": {
+        "name": "Ladeleistung"
+      },
+      "charge_rate": {
+        "name": "Ladegeschwindigkeit"
+      },
+      "charge_time_remaining": {
+        "name": "Restladezeit"
+      },
+      "charge_mode": {
+        "name": "Lademodus"
+      },
+      "plug_connection": {
+        "name": "Ladestecker"
+      },
+      "plug_lock": {
+        "name": "Steckerverriegelung"
+      },
+      "external_power": {
+        "name": "Externe Stromversorgung"
+      },
+      "mileage_value": {
+        "name": "Kilometerstand"
+      },
+      "primary_range": {
+        "name": "Primäre Reichweite"
+      },
+      "battery_level_hv_value": {
+        "name": "Batteriestand"
+      },
+      "battery_state_report_soc": {
+        "name": "Batterieladestand"
+      },
+      "battery_state_report_charge_power": {
+        "name": "Ladeleistung (Bericht)"
+      },
+      "battery_state_report_charge_rate": {
+        "name": "Ladegeschwindigkeit (Bericht)"
+      },
+      "battery_state_report_charge_energy": {
+        "name": "Geladene Energie"
+      },
+      "battery_care_mode_charge_bcam_threshold": {
+        "name": "Schwelle Batterieschonung"
+      },
+      "settings_target_soc": {
+        "name": "Ziel-Ladestand (Einstellung)"
+      },
+      "outdoor_temperature": {
+        "name": "Außentemperatur"
+      },
+      "outside_temperature": {
+        "name": "Außentemperatur"
+      },
+      "min_temperature": {
+        "name": "Batteriemodul min. Temperatur"
+      },
+      "max_temperature": {
+        "name": "Batteriemodul max. Temperatur"
+      },
+      "car_captured_time": {
+        "name": "Erfassungszeit Fahrzeug"
+      },
+      "car_captured_utc_timestamp": {
+        "name": "Fahrzeug erfasst (UTC)"
+      },
+      "instrument_cluster_time": {
+        "name": "Uhrzeit Kombiinstrument"
+      },
+      "profile_state_report_car_captured_time": {
+        "name": "Erfassungszeit Fahrzeug (Profil)"
+      },
+      "profile_state_report_instrument_cluster_time": {
+        "name": "Uhrzeit Kombiinstrument (Profil)"
+      },
+      "profile_state_report_next_charging_timer_information_estimated_start_time": {
+        "name": "Nächster Ladestart (geschätzt)"
+      },
+      "profile_state_report_next_charging_timer_information_estimated_finish_time": {
+        "name": "Nächstes Ladeende (geschätzt)"
+      },
+      "battery_state_report_remaining_charging_time_complete": {
+        "name": "Verbleibende Ladezeit"
+      },
+      "remaining_climate_time": {
+        "name": "Verbleibende Klimatisierungszeit"
+      },
+      "locked": {
+        "name": "Verriegelt"
+      },
+      "open": {
+        "name": "Offen"
+      },
+      "parking_light_left": {
+        "name": "Standlicht links"
+      },
+      "parking_light_right": {
+        "name": "Standlicht rechts"
+      },
+      "window_heating_state": {
+        "name": "Scheibenheizung"
+      },
+      "additional_consumptions_residual_consumption": {
+        "name": "Restverbrauch"
+      },
+      "additional_consumptions_interior_climatization_consumption": {
+        "name": "Verbrauch Klimatisierung"
+      },
+      "slope_consumption_values_ascent_slope_consumption_physical_value": {
+        "name": "Verbrauch bergauf"
+      },
+      "slope_consumption_values_descent_slope_consumption_physical_value": {
+        "name": "Verbrauch bergab"
+      },
+      "energy_contents_current_energy_content_physical_value": {
+        "name": "Aktueller Energieinhalt"
+      },
+      "energy_contents_maximal_energy_content_physical_value": {
+        "name": "Maximaler Energieinhalt"
+      },
+      "charging_state_report_charge_type": {
+        "name": "Ladeart"
+      },
+      "charging_state_report_charge_mode": {
+        "name": "Lademodus (Bericht)"
+      },
+      "charging_state_report_current_charge_state": {
+        "name": "Ladezustand (Bericht)"
+      },
+      "settings_max_charge_current_ac": {
+        "name": "Max. AC-Ladestrom"
+      },
+      "settings_charge_mode_selection": {
+        "name": "Lademodus-Auswahl"
+      },
+      "data_captured": {
+        "name": "Daten erfasst"
+      }
+    },
+    "binary_sensor": {
+      "locked": {
+        "name": "Verriegelung"
+      },
+      "open": {
+        "name": "Geöffnet"
+      },
+      "trunk_locked": {
+        "name": "Kofferraumverriegelung"
+      },
+      "trunk_open": {
+        "name": "Kofferraum"
+      },
+      "parking_brake": {
+        "name": "Feststellbremse"
+      },
+      "parking_lights": {
+        "name": "Standlicht"
+      },
+      "locked_state_front_left_door": {
+        "name": "Türschloss vorne links"
+      },
+      "locked_state_front_right_door": {
+        "name": "Türschloss vorne rechts"
+      },
+      "locked_state_rear_left_door": {
+        "name": "Türschloss hinten links"
+      },
+      "locked_state_rear_right_door": {
+        "name": "Türschloss hinten rechts"
+      },
+      "locked_state_tailgate": {
+        "name": "Heckklappenschloss"
+      },
+      "locked_state_front_engine_bonnet": {
+        "name": "Motorhaubenschloss"
+      },
+      "open_state_front_left_door": {
+        "name": "Tür vorne links"
+      },
+      "open_state_front_right_door": {
+        "name": "Tür vorne rechts"
+      },
+      "open_state_rear_left_door": {
+        "name": "Tür hinten links"
+      },
+      "open_state_rear_right_door": {
+        "name": "Tür hinten rechts"
+      },
+      "open_state_tailgate": {
+        "name": "Heckklappe"
+      },
+      "open_state_front_engine_bonnet": {
+        "name": "Motorhaube"
+      },
+      "safe_state_front_left_door": {
+        "name": "Tür vorne links eingerastet"
+      },
+      "safe_state_front_right_door": {
+        "name": "Tür vorne rechts eingerastet"
+      },
+      "safe_state_rear_left_door": {
+        "name": "Tür hinten links eingerastet"
+      },
+      "safe_state_rear_right_door": {
+        "name": "Tür hinten rechts eingerastet"
+      },
+      "safe_state_tailgate": {
+        "name": "Heckklappe eingerastet"
+      },
+      "safe_state_front_engine_bonnet": {
+        "name": "Motorhaube eingerastet"
+      },
+      "state_front_left_door_window_lifter": {
+        "name": "Fenster vorne links"
+      },
+      "state_front_right_door_window_lifter": {
+        "name": "Fenster vorne rechts"
+      },
+      "state_rear_left_door_window_lifter": {
+        "name": "Fenster hinten links"
+      },
+      "state_rear_right_door_window_lifter": {
+        "name": "Fenster hinten rechts"
+      },
+      "state_sunroof_motor_hood_1": {
+        "name": "Schiebedach"
+      },
+      "state_sunroof_motor_hood_3": {
+        "name": "Schiebedachmotor 3"
+      },
+      "state_of_hood": {
+        "name": "Haube"
+      },
+      "state_service_hatch": {
+        "name": "Tank-/Ladeklappe"
+      },
+      "state_spoiler": {
+        "name": "Spoiler"
+      }
+    },
+    "image": {
+      "image": {
+        "name": "Bild"
+      },
+      "image_view_front_left": {
+        "name": "Bild (vorne links)"
+      },
+      "image_view_front_center": {
+        "name": "Bild (vorne Mitte)"
+      },
+      "image_view_front_right": {
+        "name": "Bild (vorne rechts)"
+      },
+      "image_view_side_left": {
+        "name": "Bild (Seite links)"
+      },
+      "image_view_side_center": {
+        "name": "Bild (Seite Mitte)"
+      },
+      "image_view_side_right": {
+        "name": "Bild (Seite rechts)"
+      },
+      "image_view_back_left": {
+        "name": "Bild (hinten links)"
+      },
+      "image_view_back_center": {
+        "name": "Bild (hinten Mitte)"
+      },
+      "image_view_back_right": {
+        "name": "Bild (hinten rechts)"
       }
     }
   }
