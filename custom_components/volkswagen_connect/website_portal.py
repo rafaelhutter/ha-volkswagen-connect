@@ -66,6 +66,8 @@ RELOGIN_COOLDOWN_S = 900
 
 # Optional marketing opt-in VW shows after login; its "skip" button continues it (#34).
 MARKETING_CONSENT_PATH = "/login/ui/marketing-consent"
+# Second optional opt-in ("Personalised advertising"); its "skip" is a GET link.
+DATA_CLEAN_ROOM_PATH = "/hooks/data-clean-room"
 
 
 # VW's 2026 "consent wall" interrupts the still-valid SSO with a consent/terms
@@ -166,6 +168,19 @@ def _marketing_consent_skip(url: str, html: str) -> tuple[str, dict[str, str]] |
         _LOGGER.debug("Could not read VW's marketing consent page: %r", err)
         return None
     return parsed._replace(path=parsed.path + "/skip", query="").geturl(), form
+
+
+def _data_clean_room_skip(url: str, html: str) -> str | None:
+    """The advertising page's "skip" URL, or None if ``url`` isn't that page."""
+    parsed = urlparse(url)
+    if not parsed.path.endswith(DATA_CLEAN_ROOM_PATH):
+        return None
+    for link in BeautifulSoup(html, "html.parser").find_all("a", href=True):
+        href = link["href"]
+        if urlparse(href).path.endswith(DATA_CLEAN_ROOM_PATH + "/skip"):
+            return urljoin(url, href)
+    _LOGGER.debug("Could not find the skip link on VW's advertising page")
+    return None
 
 
 def _validate_landing(url: str) -> None:
@@ -287,7 +302,18 @@ class WebsitePortalClient:
         raise WebsitePortalError("too many redirects during login")
 
     async def _skip_marketing_consent(self, url: str, html: str) -> str | None:
-        """Skip VW's marketing page; returns where the login continues, or None."""
+        """Skip VW's marketing pages; returns where the login continues, or None."""
+        if clean_room := _data_clean_room_skip(url, html):
+            _LOGGER.debug("Skipping VW's advertising page")
+            async with self._session.get(
+                clean_room, headers={"User-Agent": UA}, allow_redirects=False
+            ) as r:
+                loc = r.headers.get("Location")
+                cur = str(r.url)
+                status = r.status
+            if not loc:
+                raise WebsitePortalError(f"advertising skip answered HTTP {status}")
+            return urljoin(cur, loc)
         skip = _marketing_consent_skip(url, html)
         if skip is None:
             return None
