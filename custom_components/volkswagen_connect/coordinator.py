@@ -163,6 +163,13 @@ def _drop_fuel_of_battery_only(values: dict[str, Any], traits: set[str]) -> None
             values.pop(field, None)
 
 
+def _carry_forward(known: dict[str, Any], delivered: dict[str, Any]) -> dict[str, Any]:
+    """Merge a delivery into the car's last known values; VW often sends only part of the feed."""
+    # ponytail: kept in memory only, so a restart shows just the newest delivery
+    known.update(delivered)
+    return dict(known)
+
+
 def _best_captured_at(values: dict[str, Any]) -> str | None:
     """Most recent 'captured by the car' timestamp in an EU Data Act dataset.
 
@@ -190,6 +197,8 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
         self.portal_keys: dict[str, set[str]] = defaultdict(set)
         # VIN -> drivetrain traits its deliveries have shown (see _drop_fuel_of_battery_only).
         self.drivetrain: dict[str, set[str]] = defaultdict(set)
+        # VIN -> newest value of every EU Data Act field seen (see _carry_forward).
+        self.euda_values: dict[str, dict[str, Any]] = defaultdict(dict)
         self.client = EuDataActClient(
             async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar()),
             email=entry.data[CONF_EMAIL],
@@ -243,13 +252,13 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                     data.status = STATUS_OK
                     data.dataset = latest["dataset"]
                     data.created_on = latest["created_on"]
-                    data.values = dict(latest["values"])
+                    data.values = _carry_forward(self.euda_values[vin], latest["values"])
                     _drop_fuel_of_battery_only(data.values, self.drivetrain[vin])
                     # Flat (pre-ID.x) payloads carry no dedicated capture-time
                     # field; latest["captured_at"] (the per-record timestampUtc)
                     # covers those. Dotted payloads without it fall back to
                     # searching the extracted values for a named field.
-                    data.captured_at = latest.get("captured_at") or _best_captured_at(data.values)
+                    data.captured_at = latest.get("captured_at") or _best_captured_at(latest["values"])
             except EuDataActNotConfigured:
                 data.status = STATUS_NOT_CONFIGURED
             except EuDataActAuthError as err:
