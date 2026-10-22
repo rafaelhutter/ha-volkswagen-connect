@@ -122,6 +122,50 @@ def test_dead_session_reaches_reauth() -> None:
     raise AssertionError("dead portal session was swallowed")
 
 
+class FakeEuClient:
+    """An EU Data Act feed that always carries the portal's SoC as a duplicate."""
+
+    async def list_vehicles(self) -> list[dict]:
+        return [{"vin": VIN}]
+
+    async def get_metadata(self, vin: str) -> dict:
+        return {"Identifier": "request"}
+
+    async def get_latest(self, vin: str, identifier: str) -> dict:
+        return {"dataset": "d.zip", "created_on": None, "captured_at": None,
+                "values": {"battery_state_report.soc": 79}}
+
+
+class OutagePortal(FakePortal):
+    """A portal that can time out as a whole, as on homi 2026-10-16."""
+
+    down = False
+
+    async def get_maintenance(self, vin: str) -> dict:
+        if self.down:
+            raise TimeoutError("ReadTimeout")
+        return await super().get_maintenance(vin)
+
+
+class PollingCoordinator(FakeCoordinator):
+    _async_update_data = co.VolkswagenConnectCoordinator._async_update_data
+
+    def __init__(self, portal: FakePortal) -> None:
+        super().__init__(portal)
+        self.client, self.data = FakeEuClient(), None
+        self.euda_values, self.drivetrain = co.defaultdict(dict), co.defaultdict(set)
+
+
+def test_portal_outage_does_not_let_a_duplicate_back_in() -> None:
+    """A portal-only timeout let the EU copies in, spawning sensors that then sat dead (#18)."""
+    portal = OutagePortal()
+    coordinator = PollingCoordinator(portal)
+    assert "battery_state_report.soc" not in asyncio.run(coordinator._async_update_data())[VIN].values
+    portal.down = True
+    values = asyncio.run(coordinator._async_update_data())[VIN].values
+    assert "battery_state_report.soc" not in values, values
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

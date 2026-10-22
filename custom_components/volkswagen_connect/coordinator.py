@@ -269,6 +269,9 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
 
         if self.portal is not None:
             await self._merge_portal(result)
+        # Also when the portal failed this poll: a duplicate let in spawns an entity that then sits dead.
+        for vin, data in result.items():
+            _drop_duplicates(data.values, self.portal_keys[vin])
         return result
 
     def _persist_portal_cookies(self) -> None:
@@ -404,5 +407,4 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             if info.get(k) and not data.info.get(k):
                 data.info[k] = info[k]
         self.portal_keys[vin].update(portal_values)
-        _drop_duplicates(data.values, self.portal_keys[vin])
         data.portal_ok = bool(portal_values)
