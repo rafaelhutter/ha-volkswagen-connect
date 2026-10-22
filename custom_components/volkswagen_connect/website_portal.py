@@ -214,6 +214,8 @@ class WebsitePortalClient:
         self._password = password
         self._mfa: dict[str, Any] | None = None
         self._gdc_cache: dict[str, str] = {}
+        # VIN -> cluster charging/status stays on after its first refusal (see _charging_status).
+        self._charging_gdc: dict[str, str] = {}
         self._last_relogin: float | None = None
         self._otp_required = False
 
@@ -626,12 +628,7 @@ class WebsitePortalClient:
         charge_power, charge_rate, charge_time_remaining, charge_mode,
         plug_connection, plug_lock, external_power.
         """
-        gdc = await self._gdc_for(vin)
-        status, body = await self._get(
-            f"/app/authproxy/vwag-weconnect/proxy/vehicles/{vin}/charging/status"
-            f"?gdc=myvw-{gdc}-prod&resourceHost=myvw-vcf-prod",
-            accept="*/*",
-        )
+        status, body = await self._charging_status(vin)
         if status != 200:
             _LOGGER.debug("portal charging %s -> %s", vin, status)
             return {}
@@ -663,6 +660,28 @@ class WebsitePortalClient:
         put("plug_lock", ps.get("plugLockState"))
         put("external_power", ps.get("externalPower"))
         return out
+
+    async def _charging_status(self, vin: str) -> tuple[int, str]:
+        """GET charging/status; mbb refuses an MBB plug-in hybrid (403/4004) that wcar serves (#45)."""
+
+        async def fetch(gdc: str) -> tuple[int, str]:
+            return await self._get(
+                f"/app/authproxy/vwag-weconnect/proxy/vehicles/{vin}/charging/status"
+                f"?gdc=myvw-{gdc}-prod&resourceHost=myvw-vcf-prod",
+                accept="*/*",
+            )
+
+        gdc = self._charging_gdc.get(vin) or await self._gdc_for(vin)
+        try:
+            return await fetch(gdc)
+        except WebsitePortalVehicleError:
+            if gdc == "wcar" or vin in self._charging_gdc:
+                raise
+        # Pinned before the retry, so a car wcar refuses too (combustion) is not retried every poll.
+        self._charging_gdc[vin] = gdc
+        result = await fetch("wcar")
+        self._charging_gdc[vin] = "wcar"
+        return result
 
     async def get_warning_lights(self, vin: str) -> dict[str, Any]:
         """Vehicle-health warning lights -> {"warning_lights": <count>}.
