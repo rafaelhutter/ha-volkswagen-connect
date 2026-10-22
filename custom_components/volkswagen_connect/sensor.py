@@ -46,7 +46,7 @@ _LOGGER = logging.getLogger(__name__)
 # a small fixed set of clean keys; this only ever bites if the EU Data Act payload
 # produces an unexpectedly wide/unstable key set. It is a backstop against runaway
 # entity creation — better to drop extra keys (logged) than to flood Home Assistant.
-MAX_VALUE_SENSORS_PER_VEHICLE = 100
+MAX_VALUE_SENSORS_PER_VEHICLE = 200
 
 # EU Data Act data older than this (measured at the car, not when the portal
 # delivered it) is flagged stale on the Data status sensor. The portal delivers
