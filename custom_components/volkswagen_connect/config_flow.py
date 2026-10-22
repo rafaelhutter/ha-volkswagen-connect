@@ -7,7 +7,7 @@ Steps:
   reauth_confirm -> re-enter password (e.g. after the portal SSO cookie expired).
 
 The website portal is optional: if its login can't be completed the entry is
-still created with the EU Data Act source only.
+still created with the EU Data Act source only. Non-Volkswagen brands skip it.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from .eu_data_act import (
     EuDataActError,
 )
 from .http2_session import Http2Session, create_client
-from .website_portal import WebsitePortalClient
+from .website_portal import PORTAL_BRANDS, WebsitePortalClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +86,8 @@ class VolkswagenConnectConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _start_portal(self) -> ConfigFlowResult:
         """Attempt the website-portal login; route to OTP step if required."""
+        if self._collected.get(CONF_BRAND, DEFAULT_BRAND) not in PORTAL_BRANDS:
+            return self._finish()
         session = Http2Session(create_client(self.hass))
         self._portal = WebsitePortalClient(
             session, email=self._collected[CONF_EMAIL], password=self._collected[CONF_PASSWORD]

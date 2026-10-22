@@ -55,6 +55,8 @@ IDENTITY = "https://identity.vwgroup.io"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
 REFERER = PORTAL + "/de/besitzer-und-nutzer/myvolkswagen.html"
+# volkswagen.de holds Volkswagen cars only; every other brand is EU Data Act only (#43).
+PORTAL_BRANDS = frozenset({"VOLKSWAGEN_PASSENGER_CARS", "VOLKSWAGEN_COMMERCIAL_VEHICLES"})
 
 # VW's silent SSO now chains two OAuth dances through Auth0 federation — well
 # past aiohttp's default cap of 10, which surfaced as "refresh request failed: 0".

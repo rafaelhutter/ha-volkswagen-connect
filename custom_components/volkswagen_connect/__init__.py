@@ -9,12 +9,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .binary_sensor import BINARY_KEYS
-from .const import DOMAIN
+from .const import CONF_BRAND, DOMAIN
 from .coordinator import (
     _PORTAL_DUPLICATES,
     VolkswagenConnectConfigEntry,
     VolkswagenConnectCoordinator,
 )
+from .eu_data_act import DEFAULT_BRAND
+from .website_portal import PORTAL_BRANDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: VolkswagenConnectConfigE
     await _migrate_binary_keys(hass, entry)
     _purge_portal_duplicates(hass, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    if coordinator.portal is None:
+    if coordinator.portal is None and entry.data.get(CONF_BRAND, DEFAULT_BRAND) in PORTAL_BRANDS:
         _LOGGER.warning("No volkswagen.de portal session stored; requesting a new login")
         entry.async_start_reauth(hass)
     return True

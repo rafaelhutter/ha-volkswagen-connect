@@ -163,7 +163,8 @@ update roughly every 15 minutes (not real-time).
 The **volkswagen.de** source is **Volkswagen** only. The brand selector feeds the
 EU Data Act client, which also targets Audi, Škoda, SEAT, CUPRA and Bentley via
 their portal OAuth clients (developed and tested against Volkswagen; other brands
-should work but are unverified).
+should work but are unverified). Other brands skip the volkswagen.de login, so
+there is no email code and no "Reauthentication required" prompt for them.
 
 ## Credits
 
