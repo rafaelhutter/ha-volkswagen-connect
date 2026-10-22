@@ -20,6 +20,8 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     PERCENTAGE,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
     UnitOfEnergy,
     UnitOfLength,
     UnitOfPower,
@@ -241,6 +243,23 @@ def _humanize_value(value: Any) -> Any:
     return body[:1].upper() + body[1:]
 
 
+# Some EU Data Act readings carry their unit as text: "339.75 Unit_Volt" (#44).
+_UNIT_SUFFIX_RE = re.compile(r"(-?\d+(?:\.\d+)?) Unit_(\w+)")
+_SUFFIX_UNITS = {
+    "DegreCelsi": UnitOfTemperature.CELSIUS,
+    "Volt": UnitOfElectricPotential.VOLT,
+    "Amper": UnitOfElectricCurrent.AMPERE,
+}
+
+
+def _split_unit(value: Any) -> tuple[float, str] | None:
+    """``"339.75 Unit_Volt"`` -> ``(339.75, "V")``; None for any other value."""
+    match = _UNIT_SUFFIX_RE.fullmatch(value.strip()) if isinstance(value, str) else None
+    if match is None:
+        return None
+    return float(match[1]), _SUFFIX_UNITS.get(match[2], match[2])
+
+
 # Numeric *state codes* (door/lock/access state) must stay discrete, not graph as
 # measurements (#12); state_of_charge/health are real gauges, so they're excluded.
 _DISCRETE_STATE_RE = re.compile(
@@ -457,6 +476,8 @@ class VolkswagenConnectValueSensor(_Base):
             # Uncurated numeric fields would otherwise render as discrete
             # string states in HA (no graphs, no statistics) — see issue #12.
             self._attr_state_class = SensorStateClass.MEASUREMENT
+        if not meta and (split := _split_unit(self._raw)):
+            self._attr_native_unit_of_measurement = split[1]
 
     @property
     def _raw(self) -> Any:
@@ -466,7 +487,7 @@ class VolkswagenConnectValueSensor(_Base):
 
     def _is_numeric(self) -> bool:
         val = self._raw
-        return isinstance(val, (int, float)) and not isinstance(val, bool)
+        return (isinstance(val, (int, float)) and not isinstance(val, bool)) or _split_unit(val) is not None
 
     @property
     def native_value(self) -> StateType:
@@ -479,7 +500,8 @@ class VolkswagenConnectValueSensor(_Base):
         if isinstance(val, bool):
             return str(val).lower()
         if isinstance(val, str):
-            return _humanize_value(val)
+            split = _split_unit(val)
+            return split[0] if split else _humanize_value(val)
         if self._transform is not None:
             return self._transform(val)
         return val
