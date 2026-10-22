@@ -458,17 +458,19 @@ class VolkswagenConnectValueSensor(_Base):
             # string states in HA (no graphs, no statistics) — see issue #12.
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
-    def _is_numeric(self) -> bool:
+    @property
+    def _raw(self) -> Any:
+        """This sensor's value as the coordinator holds it (None without a vehicle)."""
         v = self._vehicle
-        val = v.values.get(self._key) if v else None
+        return v.values.get(self._key) if v else None
+
+    def _is_numeric(self) -> bool:
+        val = self._raw
         return isinstance(val, (int, float)) and not isinstance(val, bool)
 
     @property
     def native_value(self) -> StateType:
-        v = self._vehicle
-        if not v:
-            return None
-        val = v.values.get(self._key)
+        val = self._raw
         # Use the public accessor, not the private `_attr_device_class`: when a
         # sensor has no device class set, reading the backing attribute directly
         # raises on HA's cached-properties machinery.
@@ -486,10 +488,7 @@ class VolkswagenConnectValueSensor(_Base):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Expose the original VW code when the displayed value was humanised,
         so templates/automations can still match the raw enum."""
-        v = self._vehicle
-        if not v:
-            return None
-        val = v.values.get(self._key)
+        val = self._raw
         if isinstance(val, str) and _humanize_value(val) != val:
             return {"raw_value": val}
         return None
