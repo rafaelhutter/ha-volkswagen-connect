@@ -24,11 +24,13 @@ Caller responsibilities:
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import logging
 import re
 import zipfile
+from collections.abc import Iterator
 from typing import Any
 from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlparse
 
@@ -253,6 +255,50 @@ def _beats(new: tuple[str, str], old: tuple[str, str]) -> bool:
     return new_key < old_key or (new_key == old_key and new_ts >= old_ts)
 
 
+# UDS diagnostic fields (``LL_*``) carry a base64 JSON document, too long for an HA state (#44).
+_DIAGNOSTIC_MARK = "eyJ"  # base64 of '{"'
+# Record bookkeeping and reserved bits inside those documents, not readings.
+_SKIP_PARAMS = ("Param_RecorDataIdent", "Param_MatchRecorDataIdent", "Param_Reser")
+# Longer values are raw hex dumps (72 zeros of Life Cycle Data) that _coerce would read as 0.
+_MAX_PARAM_LEN = 40
+
+
+def _diagnostic_params(node: Any) -> Iterator[dict[str, Any]]:
+    """Every ``{ParamShortName, Value}`` object in a decoded UDS diagnostic document."""
+    if isinstance(node, dict):
+        if "ParamShortName" in node and "Value" in node:
+            yield node
+        for child in node.values():
+            yield from _diagnostic_params(child)
+    elif isinstance(node, list):
+        for child in node:
+            yield from _diagnostic_params(child)
+
+
+def _is_reading(short: Any, raw: Any) -> bool:
+    """Is this diagnostic param a reading, not bookkeeping, a hex dump or a nested object?"""
+    if not isinstance(short, str) or short.startswith(_SKIP_PARAMS):
+        return False
+    return not isinstance(raw, (dict, list)) and not (isinstance(raw, str) and len(raw) > _MAX_PARAM_LEN)
+
+
+def _unpack_diagnostic(name: str, value: Any) -> dict[str, Any] | None:
+    """``{name.<param>: reading}`` from a base64 UDS diagnostic value, or None if it isn't one."""
+    if not isinstance(value, str) or not value.startswith(_DIAGNOSTIC_MARK):
+        return None
+    try:
+        doc = json.loads(base64.b64decode(value + "=" * (-len(value) % 4)))
+    except ValueError:
+        return None
+    out: dict[str, Any] = {}
+    for param in _diagnostic_params(doc):
+        short, raw = param["ParamShortName"], param["Value"]
+        reading = _coerce(raw) if _is_reading(short, raw) else None
+        if reading is not None:
+            out[f"{name}.{short.removeprefix('Param_')}"] = reading
+    return out
+
+
 def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     """Turn an EU Data Act dataset into ``{dataFieldName: latest value}``, plus
     the newest ``timestampUtc`` seen across all records.
@@ -262,7 +308,8 @@ def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     field. We key by ``dataFieldName`` (which is stable across the 15-min
     deliveries) and pick one record per name with ``_beats``, so each signal
     maps to exactly one sensor. Inner docs that don't use this shape fall back
-    to a generic flatten (no per-record timestamp then).
+    to a generic flatten (no per-record timestamp then). A base64 UDS diagnostic
+    value becomes one ``<name>.<param>`` value per reading inside it.
 
     ``timestampUtc`` is the moment the car reported that record - on flat
     (pre-ID.x) payloads it's the only capture-time signal available (there is
@@ -310,6 +357,9 @@ def _extract_values(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     for key in list(out):
         if key.rsplit(".", 1)[-1] in _SKIP_FIELDS:
             del out[key]
+        elif (params := _unpack_diagnostic(key, out[key])) is not None:
+            del out[key]
+            out.update(params)
     return out, latest_ts
 
 
