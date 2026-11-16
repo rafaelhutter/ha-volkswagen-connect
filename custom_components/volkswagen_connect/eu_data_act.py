@@ -58,7 +58,6 @@ BRAND_CLIENT_IDS = {
 DEFAULT_BRAND = "VOLKSWAGEN_PASSENGER_CARS"
 
 VEHICLES_PATH = "/proxy_api/consent/me/vehicles"
-RELATION_PATH = "/proxy_api/vum/v2/users/me/relations/{vin}"
 METADATA_PATH = "/proxy_api/euda-apim/datarequest/vehicles/{vin}/metadata/partial"
 LIST_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/list"
 DOWNLOAD_PATH = "/proxy_api/euda-apim/datadelivery/vehicles/{vin}/{identifier}/download"
@@ -391,8 +390,6 @@ class EuDataActClient:
         return f"{self._country}__{self._language}__{self._brand}"
 
     def _authorize_url(self) -> str:
-        from urllib.parse import urlencode
-
         params = {
             "client_id": BRAND_CLIENT_IDS[self._brand],
             "response_type": "code",
@@ -610,8 +607,6 @@ def _diagnose_login_failure(url: str, body: str) -> tuple[str, str]:
         )
     code = ""
     try:
-        from urllib.parse import parse_qs
-
         code = parse_qs(urlparse(url).query).get("error", [""])[0]
     except (ValueError, KeyError):
         pass
