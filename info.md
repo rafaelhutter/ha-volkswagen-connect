@@ -11,7 +11,7 @@ request).
 identity / become the vehicle's primary user (one-time, no S-PIN). Then add this
 integration, sign in with your Volkswagen ID, and approve the email OTP. For the
 extra EU Data Act sensors, also enable a continuous data request at
-<https://eu-data-act.drivesomethinggreater.com>.
+<https://eu-data-act.vwgroup-datahub.com>.
 
 Read-only (no remote control, no live lock/window status). EU Data Act enum codes
 are shown human-readable, with the raw code kept on each sensor's `raw_value`

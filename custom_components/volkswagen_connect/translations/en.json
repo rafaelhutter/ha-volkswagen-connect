@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Volkswagen Connect",
-        "description": "Log in with your Volkswagen ID. You'll get an email verification code (OTP) for the volkswagen.de data source — enter it on the next step. (Optional/experimental: also enable a 15-minute EU Data Act request at https://eu-data-act.drivesomethinggreater.com.)",
+        "description": "Log in with your Volkswagen ID. You'll get an email verification code (OTP) for the volkswagen.de data source — enter it on the next step. (Optional/experimental: also enable a 15-minute EU Data Act request at https://eu-data-act.vwgroup-datahub.com.)",
         "data": {
           "email": "Email",
           "password": "Password",
@@ -36,7 +36,7 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
-      "not_authorised": "This account isn't set up on the Volkswagen data portal yet. Open https://eu-data-act.drivesomethinggreater.com in a browser, sign in, accept the consent screen, link your car and turn on a continuous 15-minute data request, then try again.",
+      "not_authorised": "This account isn't set up on the Volkswagen data portal yet. Open https://eu-data-act.vwgroup-datahub.com in a browser, sign in, accept the consent screen, link your car and turn on a continuous 15-minute data request, then try again.",
       "throttled": "Too many sign-in attempts — Volkswagen has temporarily blocked logins for this account. Wait about 30 minutes and try again.",
       "account_locked": "Your Volkswagen account looks locked or disabled. Sign in at volkswagen.de to sort it out, then try again.",
       "cannot_connect": "Could not connect to Volkswagen. Please try again.",

@@ -87,7 +87,7 @@ One device per vehicle, with:
 ## EU Data Act — rich vehicle telemetry
 
 The EU Data Act obliges carmakers to expose vehicle data through a standardized
-portal (`eu-data-act.drivesomethinggreater.com`). Once you enable a **continuous
+portal (`eu-data-act.vwgroup-datahub.com`). Once you enable a **continuous
 data request** there, the integration receives the delivered dataset every ~15
 minutes and turns it into sensors — one per signal, tracking the latest value.
 
@@ -99,7 +99,7 @@ fields that duplicate a volkswagen.de sensor are dropped automatically.
 
 **One-time setup (in a browser):**
 
-1. Go to **https://eu-data-act.drivesomethinggreater.com**, log in with your
+1. Go to **https://eu-data-act.vwgroup-datahub.com**, log in with your
    Volkswagen ID, accept the consent screen, and link your vehicle.
 2. Enable a **continuous data request**: *Data clusters → Vehicle overview →
    Get customised data → **All data**, frequency **15 minutes***.

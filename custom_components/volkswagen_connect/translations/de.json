@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Volkswagen Connect",
-        "description": "Melde dich mit deiner Volkswagen ID an. Du erhältst einen Bestätigungscode per E-Mail (OTP) für die Datenquelle volkswagen.de — gib ihn im nächsten Schritt ein. (Optional/experimentell: Aktiviere zusätzlich eine 15-Minuten-Datenanfrage nach EU-Datengesetz auf https://eu-data-act.drivesomethinggreater.com.)",
+        "description": "Melde dich mit deiner Volkswagen ID an. Du erhältst einen Bestätigungscode per E-Mail (OTP) für die Datenquelle volkswagen.de — gib ihn im nächsten Schritt ein. (Optional/experimentell: Aktiviere zusätzlich eine 15-Minuten-Datenanfrage nach EU-Datengesetz auf https://eu-data-act.vwgroup-datahub.com.)",
         "data": {
           "email": "E-Mail",
           "password": "Passwort",

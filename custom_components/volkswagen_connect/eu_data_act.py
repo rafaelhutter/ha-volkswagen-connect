@@ -39,7 +39,7 @@ from bs4 import BeautifulSoup
 
 _LOGGER = logging.getLogger(__name__)
 
-BASE_URL = "https://eu-data-act.drivesomethinggreater.com"
+BASE_URL = "https://eu-data-act.vwgroup-datahub.com"
 IDENTITY_BASE = "https://identity.vwgroup.io"
 OIDC_AUTHORIZE_URL = f"{IDENTITY_BASE}/oidc/v1/authorize"
 OIDC_SCOPE = "openid cars profile"

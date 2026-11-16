@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Volkswagen Connect",
-        "description": "Fai login con il tuo Volkswagen ID. Riceverai via email un codice di verifica (OTP) dal sito volkswagen.de — inseriscilo nello step successivo. (Opzionale/sperimentale: abilita le richieste EU Data Act ogni 15 minuti su https://eu-data-act.drivesomethinggreater.com.)",
+        "description": "Fai login con il tuo Volkswagen ID. Riceverai via email un codice di verifica (OTP) dal sito volkswagen.de — inseriscilo nello step successivo. (Opzionale/sperimentale: abilita le richieste EU Data Act ogni 15 minuti su https://eu-data-act.vwgroup-datahub.com.)",
         "data": {
           "email": "Email",
           "password": "Password",

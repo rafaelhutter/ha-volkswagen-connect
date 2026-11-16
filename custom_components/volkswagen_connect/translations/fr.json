@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Volkswagen Connect",
-        "description": "Connectez-vous avec votre identifiant Volkswagen. Vous recevrez un code de vérification par e-mail (OTP) pour la source de données volkswagen.de — saisissez-le à l'étape suivante. (Optionnel/expérimental : activez aussi une requête de données EU Data Act toutes les 15 minutes sur https://eu-data-act.drivesomethinggreater.com.)",
+        "description": "Connectez-vous avec votre identifiant Volkswagen. Vous recevrez un code de vérification par e-mail (OTP) pour la source de données volkswagen.de — saisissez-le à l'étape suivante. (Optionnel/expérimental : activez aussi une requête de données EU Data Act toutes les 15 minutes sur https://eu-data-act.vwgroup-datahub.com.)",
         "data": {
           "email": "E-mail",
           "password": "Mot de passe",
