@@ -427,7 +427,9 @@ class EuDataActClient:
             page = await resp.text()
             page_url = str(resp.url)
         if "signin-service" not in page_url:
-            raise EuDataActAuthError(f"authorize did not reach signin-service (url={page_url})")
+            raise EuDataActAuthError(
+                f"authorize did not reach signin-service (url={page_url})", reason="unknown"
+            )
 
         # 2. POST email (identifier step)
         fields, action = _login_fields(page)
@@ -458,7 +460,10 @@ class EuDataActClient:
             reason, message = _diagnose_login_failure(landing_url, landing)
             raise EuDataActAuthError(message, reason=reason)
         if urlparse(landing_url).hostname != urlparse(BASE_URL).hostname:
-            raise EuDataActAuthError(f"login did not land on portal (url={landing_url})")
+            # The password was accepted, so "invalid email or password" would mislead (#49).
+            raise EuDataActAuthError(
+                f"login did not land on portal (url={landing_url})", reason="unknown"
+            )
         self._logged_in = True
         _LOGGER.debug("EU Data Act login OK")
 

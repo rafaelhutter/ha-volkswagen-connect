@@ -95,6 +95,15 @@ def test_real_consent_screen_still_asks_for_the_browser() -> None:
         raise AssertionError("a real consent screen must not log in")
 
 
+def test_landing_off_the_portal_is_not_a_bad_password() -> None:
+    try:
+        _login("https://eu-data-act.example.com/de/en/user.html")
+    except eu.EuDataActAuthError as err:
+        assert err.reason == "unknown", err.reason
+    else:
+        raise AssertionError("a foreign landing host must not log in")
+
+
 def test_callback_only_for_marketing_pages() -> None:
     assert eu._marketing_consent_callback(REAL_CONSENT) is None
     assert eu._marketing_consent_callback(PORTAL_HOME) is None
