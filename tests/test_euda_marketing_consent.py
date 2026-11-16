@@ -41,12 +41,6 @@ class _Response:
     async def __aexit__(self, *exc):
         return False
 
-    def __await__(self):  # the priming GET is awaited, not entered
-        async def _self():
-            return self
-
-        return _self().__await__()
-
 
 class _Session:
     """VW's login as the portal sees it; the password step lands on ``after_password``."""

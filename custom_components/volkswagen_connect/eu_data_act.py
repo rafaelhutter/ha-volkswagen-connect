@@ -418,7 +418,8 @@ class EuDataActClient:
         hdrs = {"User-Agent": USER_AGENT}
         # 0. prime portal (sets AEM cookies the callback needs)
         try:
-            await self._session.get(BASE_URL + "/", headers=hdrs)
+            async with self._session.get(BASE_URL + "/", headers=hdrs):
+                pass
         except aiohttp.ClientError as err:
             _LOGGER.debug("EU Data Act priming GET failed (ignored): %s", err)
 
