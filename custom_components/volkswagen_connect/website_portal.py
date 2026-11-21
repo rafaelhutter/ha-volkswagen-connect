@@ -43,6 +43,9 @@ from yarl import URL
 
 _LOGGER = logging.getLogger(__name__)
 
+# Key under which get_warning_lights hands over the light details (not a sensor value).
+WARNING_LIGHTS_DETAILS = "_warning_lights_details"
+
 PORTAL = "https://www.volkswagen.de"
 AUTHPROXY_LOGIN = (
     PORTAL + "/app/authproxy/login?fag=vw-de,vwag-weconnect"
@@ -684,10 +687,12 @@ class WebsitePortalClient:
         return result
 
     async def get_warning_lights(self, vin: str) -> dict[str, Any]:
-        """Vehicle-health warning lights -> {"warning_lights": <count>}.
+        """Vehicle-health warning lights -> {"warning_lights": <count>, WARNING_LIGHTS_DETAILS: [...]}.
 
         warninglights/last returns the currently-active dashboard warning lights;
-        an empty list means everything is OK (count 0).
+        an empty list means everything is OK (count 0). The lights themselves are
+        passed on as well, so the sensor can say *which* light is on (the
+        coordinator moves them out of the values before sensors are created).
         """
         gdc = await self._gdc_for(vin)
         status, body = await self._get(
@@ -704,7 +709,10 @@ class WebsitePortalClient:
             return {}
         if not isinstance(lights, list):
             return {}
-        return {"warning_lights": len(lights)}
+        return {
+            "warning_lights": len(lights),
+            WARNING_LIGHTS_DETAILS: [light for light in lights if isinstance(light, dict)],
+        }
 
     async def get_lock_history(self, vin: str) -> dict[str, Any]:
         """Last *confirmed* remote lock/unlock command from the transaction log.

@@ -43,6 +43,7 @@ from .eu_data_act import (
 )
 from .http2_session import Http2Session, create_client
 from .website_portal import (
+    WARNING_LIGHTS_DETAILS,
     WebsitePortalAuthError,
     WebsitePortalClient,
     WebsitePortalError,
@@ -86,6 +87,9 @@ class VehicleData:
     primary_image_view: str | None = None
     # True once the portal served this vehicle signals (gates the duplicate purge).
     portal_ok: bool = False
+    # Active dashboard warning lights as the portal lists them (attribute of the
+    # warning_lights sensor; empty when none are on or the portal did not answer).
+    warning_lights: list[dict[str, Any]] = field(default_factory=list)
 
 
 type VolkswagenConnectConfigEntry = ConfigEntry["VolkswagenConnectCoordinator"]
@@ -396,6 +400,8 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             ("lock history", self.portal.get_lock_history),
         ):
             portal_values.update(await self._portal_fetch(what, vin, fetch))
+        # The light details are an attribute, not a sensor of their own.
+        data.warning_lights = portal_values.pop(WARNING_LIGHTS_DETAILS, None) or []
         data.values.update(portal_values)
         # Exterior images (public CDN URLs, served by the image platform).
         # All views in one call; a side/profile shot is the primary "Image".

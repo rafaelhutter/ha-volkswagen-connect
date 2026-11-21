@@ -513,6 +513,9 @@ class VolkswagenConnectValueSensor(_Base):
         val = self._raw
         if isinstance(val, str) and _humanize_value(val) != val:
             return {"raw_value": val}
+        if self._key == "warning_lights" and self._vehicle is not None:
+            # Which lights are on, not just how many (count 0 -> empty list).
+            return {"lights": self._vehicle.warning_lights}
         return None
 
     @property
