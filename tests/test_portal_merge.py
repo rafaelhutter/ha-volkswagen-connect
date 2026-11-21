@@ -40,7 +40,10 @@ class FakePortal:
         return self._answer("charging", {"soc": 80})
 
     async def get_warning_lights(self, vin: str) -> dict:
-        return self._answer("warning_lights", {"warning_lights": 0})
+        return self._answer(
+            "warning_lights",
+            {"warning_lights": 1, co.WARNING_LIGHTS_DETAILS: [{"text": "Washer fluid low"}]},
+        )
 
     async def get_lock_history(self, vin: str) -> dict:
         return self._answer("lock_history", {"last_lock_action": "locked"})
@@ -110,6 +113,20 @@ def test_portal_serving_nothing_is_not_reported_ok() -> None:
     data = _merge("maintenance", "charging", "warning_lights", "lock_history", "images", "info")
     assert data.values == {}, data.values
     assert not data.portal_ok
+
+
+def test_warning_light_details_are_an_attribute_not_a_sensor() -> None:
+    """The light details go to VehicleData.warning_lights, never into the sensor values."""
+    data = _merge()
+    assert data.values.get("warning_lights") == 1, data.values
+    assert co.WARNING_LIGHTS_DETAILS not in data.values, data.values
+    assert data.warning_lights == [{"text": "Washer fluid low"}], data.warning_lights
+
+
+def test_refused_warning_lights_leave_no_stale_details() -> None:
+    data = _merge("warning_lights")
+    assert "warning_lights" not in data.values
+    assert data.warning_lights == []
 
 
 def test_dead_session_reaches_reauth() -> None:

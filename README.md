@@ -92,7 +92,7 @@ One device per vehicle:
   Charging state, Charge power/rate, Charge time remaining, Target battery, Battery
   temperature, Plug / Plug lock / External power.
 - **Odometer**, **Inspection due**, **Oil service due**, **Last vehicle report**.
-- **Warning lights** — number of active dashboard warning lights (`0` = all OK).
+- **Warning lights** — number of active dashboard warning lights (`0` = all OK); attribute `lights` lists the active lights as the portal reports them.
 - **Last lock command** / **Last lock command time** — most recent *confirmed*
   remote lock/unlock from the transaction log (command history, **not** a live
   lock sensor — see Limitations).
