@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from http.cookies import CookieError, SimpleCookie
+from email.utils import parsedate_to_datetime
+from http.cookies import CookieError, Morsel, SimpleCookie
 from typing import Any
 
 import aiohttp
 import httpx
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
+
+
+def _cookie_expiry(morsel: Morsel, now: float) -> float | None:
+    """Absolute expiry (epoch seconds) a Set-Cookie asks for; None for a session cookie."""
+    if morsel["max-age"]:
+        try:
+            return now + int(morsel["max-age"])
+        except ValueError:
+            return None
+    if morsel["expires"]:
+        try:
+            return parsedate_to_datetime(morsel["expires"]).timestamp()
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def create_client(hass: Any) -> httpx.AsyncClient:
@@ -44,6 +61,8 @@ class Http2Session:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
         self.cookie_jar = aiohttp.CookieJar()
+        # (domain, name) -> expiry the server asked for; the jar itself drops it on export.
+        self.cookie_expiry: dict[tuple[str, str], float] = {}
 
     @asynccontextmanager
     async def get(self, url: str, **kwargs: Any) -> AsyncIterator[Http2Response]:
@@ -72,6 +91,13 @@ class Http2Session:
             except CookieError:
                 continue
             self.cookie_jar.update_cookies(cookie, URL(str(resp.url)))
+            now = time.time()
+            for name, morsel in cookie.items():
+                domain = (morsel["domain"] or resp.url.host or "").lstrip(".")
+                if (expiry := _cookie_expiry(morsel, now)) is not None:
+                    self.cookie_expiry[(domain, name)] = expiry
+                else:
+                    self.cookie_expiry.pop((domain, name), None)
         return resp
 
     async def _request(

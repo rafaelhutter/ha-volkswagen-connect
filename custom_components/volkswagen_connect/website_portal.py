@@ -14,9 +14,12 @@ The resulting session (cookies) is exportable for persistence; while the `auth0`
 SSO cookie is valid, `refresh()` re-establishes the short-lived portal session
 silently (no credentials, no OTP). VW expires that SSO every few days anyway, so
 refresh() then falls back to a stored-credential login — the persisted MFA
-"remember this browser" cookie normally carries it through without a new OTP.
-Only when that also needs an OTP does refresh() raise WebsitePortalAuthError and
-the integration trigger HA reauth.
+"remember this browser" cookie (`auth0-mfa-v2`, Max-Age 7 days from the OTP,
+not renewed by later logins) carries it through without a new OTP until it
+lapses. Only when that also needs an OTP does refresh() raise
+WebsitePortalAuthError and the integration trigger HA reauth. Every visit to VW's
+authorize step mails a code once that cookie has lapsed, so callers refresh only
+when a data call finds the session stale.
 
 Caller must pass an aiohttp.ClientSession with its OWN cookie jar.
 
@@ -33,6 +36,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import UTC, datetime
 from http.cookies import SimpleCookie
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
@@ -81,6 +85,26 @@ _CONSENT_HINT = (
 )
 
 _OTP_HINT = "Volkswagen wants a new email code; please reconfigure the integration"
+
+# VW's "remember this browser" cookie: 7 days from the email code, not renewed.
+_MFA_COOKIE = ("identity.vwgroup.io", "auth0-mfa-v2")
+
+# (label, host, cookie) of the three expiries the session depends on, for the logs.
+_SESSION_COOKIES = (
+    ("MFA", *_MFA_COOKIE),
+    ("SSO", "identity.vwgroup.io", "auth0"),
+    ("portal", "www.volkswagen.de", "SESSION"),
+)
+
+
+def _when(expiry: float | None) -> str:
+    """'2026-12-03 19:36 UTC' for a cookie expiry, 'unknown' without one."""
+    if expiry is None:
+        return "unknown"
+    try:
+        return datetime.fromtimestamp(expiry, UTC).strftime("%Y-%m-%d %H:%M UTC")
+    except (OverflowError, OSError, ValueError):
+        return "unknown"
 
 
 def _is_consent_url(url: str) -> bool:
@@ -225,22 +249,45 @@ class WebsitePortalClient:
     # (pre-0.5.9) persisted cookies that carry no domain.
     _HOSTS = ("https://www.volkswagen.de/", "https://identity.vwgroup.io/")
 
-    def export_cookies(self) -> list[dict[str, str]]:
-        """Persist cookies as (domain, key, value) triples.
+    def export_cookies(self) -> list[dict[str, Any]]:
+        """Persist cookies as (domain, key, value) triples plus the expiry VW set.
 
         Keyed by (domain, key) — NOT key alone — so a cookie that exists on
         both www.volkswagen.de and identity.vwgroup.io (VW's stack reuses
         cookie names across hosts) no longer clobbers its twin. Collapsing on
         the bare key was corrupting the identity-host SSO cookie on every
         persist, which silently broke the silent refresh and forced a re-login.
+        ``expires`` (epoch seconds, when VW sent one) feeds the logs and the MFA
+        gate in refresh(). The jar drops a cookie once it has expired, so the three
+        tracked ones are kept as value-less entries to remember that.
         """
+        expiry = getattr(self._session, "cookie_expiry", {})
         seen: dict[tuple[str, str], str] = {}
         for cookie in self._session.cookie_jar:
             domain = cookie["domain"] or ""
             seen[(domain, cookie.key)] = cookie.value
-        return [{"domain": d, "key": k, "value": v} for (d, k), v in seen.items()]
+        out: list[dict[str, Any]] = []
+        for (domain, key), value in seen.items():
+            item: dict[str, Any] = {"domain": domain, "key": key, "value": value}
+            if (exp := expiry.get((domain.lstrip("."), key))) is not None:
+                item["expires"] = int(exp)
+            out.append(item)
+        for _, host, name in _SESSION_COOKIES:
+            if (host, name) in expiry and (host, name) not in seen:
+                out.append(
+                    {"domain": host, "key": name, "value": "", "expires": int(expiry[(host, name)])}
+                )
+        return out
 
-    def import_cookies(self, data: list[dict[str, str]]) -> None:
+    def session_summary(self) -> str:
+        """Expiry of the MFA, SSO and portal cookies, for the logs."""
+        expiry = getattr(self._session, "cookie_expiry", {})
+        return ", ".join(
+            f"{label} cookie until {_when(expiry.get((host, name)))}"
+            for label, host, name in _SESSION_COOKIES
+        )
+
+    def import_cookies(self, data: list[dict[str, Any]]) -> None:
         """Restore cookies to their origin host.
 
         The 0.5.9+ format carries a per-cookie ``domain``; each cookie is filed
@@ -249,6 +296,7 @@ class WebsitePortalClient:
         hosts — the old best-effort behaviour — so existing installs keep
         working until the next persist upgrades them in place.
         """
+        expiry = getattr(self._session, "cookie_expiry", None)
         legacy: SimpleCookie = SimpleCookie()
         for c in data:
             key = c.get("key")
@@ -259,6 +307,10 @@ class WebsitePortalClient:
             if not domain:
                 legacy[key] = value
                 continue
+            if expiry is not None and c.get("expires") is not None:
+                expiry[(domain.lstrip("."), key)] = float(c["expires"])
+            if not value:
+                continue  # an expired cookie kept only for its expiry
             sc: SimpleCookie = SimpleCookie()
             sc[key] = value
             sc[key]["path"] = "/"
@@ -395,6 +447,7 @@ class WebsitePortalClient:
             raise WebsitePortalAuthError("OTP rejected")
         _validate_landing(await self._follow(urljoin(cur, loc)))
         self._mfa = None
+        _LOGGER.info("Email code accepted; %s", self.session_summary())
         return "ok"
 
     async def refresh(self) -> None:
@@ -409,10 +462,17 @@ class WebsitePortalClient:
         # Once VW wants a code, every further attempt mails another one (#31).
         if self._otp_required:
             raise WebsitePortalOtpRequired(_OTP_HINT)
+        # Past that cookie VW's authorize step mails a code; leave that to the user's reauth.
+        lapsed = getattr(self._session, "cookie_expiry", {}).get(_MFA_COOKIE)
+        if lapsed is not None and lapsed < time.time():
+            self._otp_required = True
+            _LOGGER.info("MFA cookie lapsed, not logging in; %s", self.session_summary())
+            raise WebsitePortalOtpRequired(_OTP_HINT)
         try:
             await self._refresh_or_relogin()
         except WebsitePortalOtpRequired:
             self._otp_required = True
+            _LOGGER.info("Portal login needs an email code; %s", self.session_summary())
             raise
 
     async def _refresh_or_relogin(self) -> None:
@@ -429,7 +489,11 @@ class WebsitePortalClient:
             ):
                 raise
             self._last_relogin = now
-            _LOGGER.info("Portal SSO gone (%s); re-logging in with stored credentials", err)
+            _LOGGER.info(
+                "Portal SSO gone (%s); re-logging in with stored credentials (%s)",
+                err,
+                self.session_summary(),
+            )
             if await self.begin_login() != "ok":
                 self._mfa = None
                 raise WebsitePortalOtpRequired(_OTP_HINT) from err
@@ -516,7 +580,20 @@ class WebsitePortalClient:
         )
         auth_failed = status in (401, 403, 412, 428)
         if not _retried and (auth_failed or login_redirect or (status >= 500 and body[:1] == "<")):
-            await self.refresh()
+            _LOGGER.debug(
+                "Portal answered HTTP %s on %s; refreshing the session", status, path.split("?")[0]
+            )
+            try:
+                await self.refresh()
+            except WebsitePortalOtpRequired as err:
+                # Only these say the session itself is gone; a refusal or outage on
+                # one endpoint must not end a session that still works.
+                if status in (401, 412) or login_redirect:
+                    raise
+                raise WebsitePortalVehicleError(
+                    f"portal answered HTTP {status} on {path.split('?')[0]}; "
+                    "not renewing the session without an email code"
+                ) from err
             return await self._get(path, accept, _retried=True)
         # Still rejected after a fresh session -> the session is genuinely dead.
         # Surface it so the coordinator prompts a reconfigure instead of quietly
@@ -584,6 +661,8 @@ class WebsitePortalClient:
                     "Relation lookup for %s -> %s; vehicle may not be linked to this account",
                     vin, status,
                 )
+        except WebsitePortalAuthError:
+            raise  # a dead session is no reason to pin the fallback cluster
         except (ValueError, AttributeError, WebsitePortalError) as err:
             _LOGGER.debug("Could not resolve gdc for %s, defaulting to %r: %s", vin, gdc, err)
         # Names the cluster a 412 would be coming from — first thing to ask for.

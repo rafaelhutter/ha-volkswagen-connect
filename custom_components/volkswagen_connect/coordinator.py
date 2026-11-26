@@ -9,7 +9,6 @@ Two data sources, merged per vehicle:
 from __future__ import annotations
 
 import logging
-import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -50,10 +49,6 @@ from .website_portal import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# Don't roll the session more often than this (avoids a double refresh when the
-# explicit startup refresh is immediately followed by the first poll).
-_MIN_REFRESH_INTERVAL_S = 600
 
 
 def _choose_primary_view(views: dict[str, str]) -> str | None:
@@ -191,8 +186,6 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
     def __init__(self, hass: HomeAssistant, entry: VolkswagenConnectConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL)
         self.entry = entry
-        # Monotonic timestamp of the last portal session refresh (None = never).
-        self._last_refresh: float | None = None
         # VIN -> portal signals that car has ever served (see _drop_duplicates).
         self.portal_keys: dict[str, set[str]] = defaultdict(set)
         # VIN -> drivetrain traits its deliveries have shown (see _drop_fuel_of_battery_only).
@@ -215,6 +208,7 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 password=entry.data[CONF_PASSWORD],
             )
             self.portal.import_cookies(cookies)
+            _LOGGER.info("Stored portal session: %s", self.portal.session_summary())
 
     async def _async_update_data(self) -> dict[str, VehicleData]:
         result: dict[str, VehicleData] = {}
@@ -282,49 +276,16 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
             data={**self.entry.data, CONF_WEBSITE_COOKIES: self.portal.export_cookies()},
         )
 
-    async def async_refresh_session(self, *, force: bool = False) -> None:
-        """Roll the website-portal session (best-effort) and persist it.
-
-        Called once at startup and again at the start of every poll, so both the
-        portal's downstream tokens and the identity SSO behind the silent refresh
-        stay rolled. Skips if a refresh happened within the last few minutes
-        (unless ``force``), to avoid a double refresh when the startup call is
-        immediately followed by the first poll. Never raises.
-        """
-        if self.portal is None:
-            return
-        if (
-            not force
-            and self._last_refresh is not None
-            and time.monotonic() - self._last_refresh < _MIN_REFRESH_INTERVAL_S
-        ):
-            return
-        try:
-            await self.portal.refresh()
-            self._last_refresh = time.monotonic()
-            self._persist_portal_cookies()
-        except WebsitePortalAuthError as err:
-            _LOGGER.debug(
-                "Session refresh: SSO not usable yet (%s); trying existing session",
-                err,
-            )
-        except Exception as err:  # noqa: BLE001 - never block on a refresh hiccup
-            _LOGGER.debug("Session refresh failed (continuing): %s", err)
-
     async def _merge_portal(self, result: dict[str, VehicleData]) -> None:
         """Enrich vehicles with portal data; a dead session raises reauth.
 
-        Keep-alive: the portal session's downstream tokens expire ~30 min after
-        the last login and are NOT renewed by data calls, while the identity SSO
-        behind the silent refresh lapses if it isn't exercised often enough. So
-        we proactively roll the session every cycle (15 min, well inside that
-        window) instead of only reacting to a 401 — by which point the SSO has
-        often already gone, forcing a needless re-login. Best-effort: if the
-        refresh fails we still try the existing session, and only a failing
-        *data* call is treated as a real auth loss.
+        The session is only renewed when a data call finds it stale (the portal
+        client refreshes and retries once). Renewing it up front on every setup
+        and poll went through VW's authorize step each time, which mails an email
+        code as soon as VW's 7-day "remember this browser" cookie has lapsed,
+        even while the stored session still served data.
         """
         assert self.portal is not None
-        await self.async_refresh_session()
 
         auth_failed: WebsitePortalAuthError | None = None
         try:
@@ -357,6 +318,9 @@ class VolkswagenConnectCoordinator(DataUpdateCoordinator[dict[str, VehicleData]]
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug("Could not persist portal cookies: %s", err)
         if auth_failed is not None:
+            _LOGGER.info(
+                "Portal session ended (%s); %s", auth_failed, self.portal.session_summary()
+            )
             # Surface it as a proper reauth: HA shows a "Reauthentication
             # required" repair instead of entities silently going stale (#13).
             raise ConfigEntryAuthFailed(
