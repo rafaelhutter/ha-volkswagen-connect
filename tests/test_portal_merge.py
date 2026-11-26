@@ -28,6 +28,9 @@ class FakePortal:
     def __init__(self, *refused: str) -> None:
         self.refused = set(refused)
 
+    def session_summary(self) -> str:
+        return "MFA cookie until unknown"
+
     def _answer(self, what: str, payload: dict) -> dict:
         if what in self.refused:
             raise WebsitePortalVehicleError(f"portal refused {what} (HTTP 412)")
@@ -62,9 +65,6 @@ class FakeCoordinator:
     _portal_fetch = co.VolkswagenConnectCoordinator._portal_fetch
     _merge_one = co.VolkswagenConnectCoordinator._merge_one
     _merge_portal = co.VolkswagenConnectCoordinator._merge_portal
-
-    async def async_refresh_session(self) -> None:
-        pass
 
     def _persist_portal_cookies(self) -> None:
         pass

@@ -55,11 +55,14 @@ enabling a **continuous data request** on VW's EU Data Act portal — see
 
 VW expires that session every few days on its own schedule. The integration
 logs back in for you with the credentials you already gave it — VW remembers
-the browser, so no new OTP is needed and you won't notice. Only if VW does ask
-for a fresh code does Home Assistant show a **Reauthentication required**
-prompt: re-enter your password plus the email OTP there and the data resumes.
-No need to remove and re-add anything. The background attempt that noticed it
-may already have sent you one code; ignore that one and use the newest email.
+the browser for 7 days after you last entered a code, so no new OTP is needed
+until then. After that VW asks for a fresh code and Home Assistant shows a
+**Reauthentication required** prompt: re-enter your password plus the email OTP
+there and the data resumes. No need to remove and re-add anything. The
+integration only logs in again once its session has lapsed, and once it knows
+the 7 days are over it never asks VW for a code on its own: the code mail comes
+with your reauthentication (use the newest email). An install that predates this
+only knows the 7 days after its next code entry.
 If the volkswagen.de login couldn't be finished during setup (say VW was down),
 the integration starts on EU Data Act alone and shows the same prompt, so you
 can finish the login once VW is back.
